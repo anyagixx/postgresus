@@ -34,7 +34,7 @@ export const DiscoveryReadOnlyComponent = ({
     const createTempDatabase = (): Database => {
         const firstDb = selectedDatabases[0];
         return {
-            id: 'temp-discovery',
+            id: '00000000-0000-0000-0000-000000000000',
             name: firstDb.name,
             workspaceId: '',
             type: DatabaseType.POSTGRES,
