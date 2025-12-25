@@ -13,6 +13,7 @@ import {
 import { EditBackupConfigComponent } from '../../../backups';
 import { EditDatabaseNotifiersComponent } from '../edit/EditDatabaseNotifiersComponent';
 import { DatabaseSelectionComponent } from './DatabaseSelectionComponent';
+import { DiscoveryReadOnlyComponent } from './DiscoveryReadOnlyComponent';
 import { ServerConnectionComponent } from './ServerConnectionComponent';
 
 interface Props {
@@ -21,7 +22,7 @@ interface Props {
     onClose: () => void;
 }
 
-type Step = 'server-connection' | 'select-databases' | 'backup-config' | 'notifiers';
+type Step = 'server-connection' | 'select-databases' | 'readonly-user' | 'backup-config' | 'notifiers';
 
 export const DiscoveryCreateDatabaseComponent = ({ workspaceId, onCreated, onClose }: Props) => {
     const [step, setStep] = useState<Step>('server-connection');
@@ -61,6 +62,15 @@ export const DiscoveryCreateDatabaseComponent = ({ workspaceId, onCreated, onClo
 
     const handleDatabasesSelected = (databases: DiscoveredDatabase[]) => {
         setSelectedDatabases(databases);
+        setStep('readonly-user');
+    };
+
+    const handleReadOnlyUserCreated = (updatedConnection: ServerConnection) => {
+        setServerConnection(updatedConnection);
+        setStep('backup-config');
+    };
+
+    const handleReadOnlySkipped = () => {
         setStep('backup-config');
     };
 
@@ -124,6 +134,18 @@ export const DiscoveryCreateDatabaseComponent = ({ workspaceId, onCreated, onClo
                 databases={discoveredDatabases}
                 onSelected={handleDatabasesSelected}
                 onBack={() => setStep('server-connection')}
+            />
+        );
+    }
+
+    if (step === 'readonly-user' && serverConnection) {
+        return (
+            <DiscoveryReadOnlyComponent
+                serverConnection={serverConnection}
+                selectedDatabases={selectedDatabases}
+                onReadOnlyUserCreated={handleReadOnlyUserCreated}
+                onSkip={handleReadOnlySkipped}
+                onBack={() => setStep('select-databases')}
             />
         );
     }
