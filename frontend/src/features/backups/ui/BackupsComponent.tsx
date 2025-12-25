@@ -22,7 +22,7 @@ import {
   backupConfigApi,
   backupsApi,
 } from '../../../entity/backups';
-import { type Database, DatabaseType } from '../../../entity/databases';
+import { type Database, DatabaseType, databaseApi } from '../../../entity/databases';
 import { getUserTimeFormat } from '../../../shared/time';
 import { ConfirmationComponent } from '../../../shared/ui';
 import { RestoresComponent } from '../../restores';
@@ -33,9 +33,10 @@ interface Props {
   database: Database;
   isCanManageDBs: boolean;
   scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
+  workspaceId?: string;
 }
 
-export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef }: Props) => {
+export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef, workspaceId }: Props) => {
   const [isBackupsLoading, setIsBackupsLoading] = useState(false);
   const [backups, setBackups] = useState<Backup[]>([]);
 
@@ -61,6 +62,7 @@ export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef 
 
   const [downloadingBackupId, setDownloadingBackupId] = useState<string | undefined>();
   const [cancellingBackupId, setCancellingBackupId] = useState<string | undefined>();
+  const [isBackupAllLoading, setIsBackupAllLoading] = useState(false);
 
   const downloadBackup = async (backupId: string) => {
     try {
@@ -189,6 +191,36 @@ export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef 
     setIsMakeBackupRequestLoading(false);
   };
 
+  const backupAll = async () => {
+    if (!workspaceId) return;
+
+    setIsBackupAllLoading(true);
+
+    try {
+      // Get all databases in workspace
+      const allDatabases = await databaseApi.getDatabases(workspaceId);
+
+      // Start backup for each database
+      for (const db of allDatabases) {
+        try {
+          await backupsApi.makeBackup(db.id);
+        } catch (e) {
+          console.error(`Failed to backup database ${db.name}:`, e);
+        }
+      }
+
+      // Reload current database backups after a delay
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      setCurrentLimit(BACKUPS_PAGE_SIZE);
+      setHasMore(true);
+      await loadBackups(BACKUPS_PAGE_SIZE);
+    } catch (e) {
+      alert((e as Error).message);
+    }
+
+    setIsBackupAllLoading(false);
+  };
+
   const deleteBackup = async () => {
     if (!deleteConfimationId) {
       return;
@@ -236,7 +268,7 @@ export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef 
       loadBackups(BACKUPS_PAGE_SIZE).then(() => setIsBackupsLoading(false));
     });
 
-    return () => {};
+    return () => { };
   }, [database]);
 
   // Reload backups that are in progress to update their state
@@ -548,10 +580,9 @@ export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef 
 
       <div className="mt-5" />
 
-      <div className="flex">
+      <div className="flex gap-2">
         <Button
           onClick={makeBackup}
-          className="mr-1"
           type="primary"
           disabled={isMakeBackupRequestLoading}
           loading={isMakeBackupRequestLoading}
@@ -559,6 +590,17 @@ export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef 
           <span className="md:hidden">Backup now</span>
           <span className="hidden md:inline">Make backup right now</span>
         </Button>
+
+        {workspaceId && (
+          <Button
+            onClick={backupAll}
+            disabled={isBackupAllLoading || isMakeBackupRequestLoading}
+            loading={isBackupAllLoading}
+          >
+            <span className="md:hidden">Backup All</span>
+            <span className="hidden md:inline">Backup All Databases</span>
+          </Button>
+        )}
       </div>
 
       <div className="mt-5 w-full md:max-w-[850px]">

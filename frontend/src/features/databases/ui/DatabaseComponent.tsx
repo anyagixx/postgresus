@@ -10,6 +10,7 @@ import { DatabaseConfigComponent } from './DatabaseConfigComponent';
 interface Props {
   contentHeight: number;
   databaseId: string;
+  workspaceId: string;
   onDatabaseChanged: (database: Database) => void;
   onDatabaseDeleted: () => void;
   isCanManageDBs: boolean;
@@ -18,6 +19,7 @@ interface Props {
 export const DatabaseComponent = ({
   contentHeight,
   databaseId,
+  workspaceId,
   onDatabaseChanged,
   onDatabaseDeleted,
   isCanManageDBs,
@@ -83,6 +85,7 @@ export const DatabaseComponent = ({
             database={database}
             isCanManageDBs={isCanManageDBs}
             scrollContainerRef={scrollContainerRef}
+            workspaceId={workspaceId}
           />
         </>
       )}

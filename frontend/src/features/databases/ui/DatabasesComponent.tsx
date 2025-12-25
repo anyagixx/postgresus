@@ -164,6 +164,7 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
             <DatabaseComponent
               contentHeight={isMobile ? contentHeight - 50 : contentHeight}
               databaseId={selectedDatabaseId}
+              workspaceId={workspace.id}
               onDatabaseChanged={() => {
                 loadDatabases();
               }}
