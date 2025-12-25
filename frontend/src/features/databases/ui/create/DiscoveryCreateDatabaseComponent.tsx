@@ -1,3 +1,4 @@
+import { Button, Modal } from 'antd';
 import { useState } from 'react';
 
 import { type BackupConfig, backupConfigApi, backupsApi } from '../../../../entity/backups';
@@ -27,6 +28,8 @@ type Step = 'server-connection' | 'select-databases' | 'readonly-user' | 'backup
 export const DiscoveryCreateDatabaseComponent = ({ workspaceId, onCreated, onClose }: Props) => {
     const [step, setStep] = useState<Step>('server-connection');
     const [isCreating, setIsCreating] = useState(false);
+    const [showBackupModal, setShowBackupModal] = useState(false);
+    const [createdDatabaseIds, setCreatedDatabaseIds] = useState<string[]>([]);
 
     // Server connection state
     const [serverConnection, setServerConnection] = useState<ServerConnection | null>(null);
@@ -97,25 +100,43 @@ export const DiscoveryCreateDatabaseComponent = ({ workspaceId, onCreated, onClo
             // Batch create all databases
             const createdDatabases = await databaseApi.createDatabaseBatch(workspaceId, databasesToCreate);
 
-            // Create backup configs for each database
+            // Create backup configs for each database (without running backups yet)
             for (const createdDb of createdDatabases) {
                 if (backupConfig) {
                     const dbBackupConfig = { ...backupConfig, databaseId: createdDb.id };
                     await backupConfigApi.saveBackupConfig(dbBackupConfig);
-
-                    if (dbBackupConfig.isBackupsEnabled) {
-                        await backupsApi.makeBackup(createdDb.id);
-                    }
                 }
             }
 
-            onCreated(createdDatabases.map((db) => db.id));
-            onClose();
+            // Store created database IDs and show modal
+            const dbIds = createdDatabases.map((db) => db.id);
+            setCreatedDatabaseIds(dbIds);
+            setIsCreating(false);
+            setShowBackupModal(true);
         } catch (error) {
             alert(error);
+            setIsCreating(false);
         }
+    };
 
-        setIsCreating(false);
+    const handleBackupNow = async () => {
+        // Run backups for all created databases
+        for (const dbId of createdDatabaseIds) {
+            try {
+                await backupsApi.makeBackup(dbId);
+            } catch (e) {
+                console.error('Failed to backup database', dbId, e);
+            }
+        }
+        setShowBackupModal(false);
+        onCreated(createdDatabaseIds);
+        onClose();
+    };
+
+    const handleSkipBackup = () => {
+        setShowBackupModal(false);
+        onCreated(createdDatabaseIds);
+        onClose();
     };
 
     if (step === 'server-connection') {
@@ -189,5 +210,29 @@ export const DiscoveryCreateDatabaseComponent = ({ workspaceId, onCreated, onClo
         );
     }
 
-    return null;
+    return (
+        <Modal
+            title="Databases Added Successfully!"
+            open={showBackupModal}
+            footer={null}
+            closable={false}
+            width={450}
+        >
+            <div className="mb-5">
+                <p className="mb-3">
+                    <strong>{createdDatabaseIds.length} database{createdDatabaseIds.length !== 1 ? 's' : ''}</strong> have been added successfully.
+                </p>
+                <p>Would you like to create backup copies now?</p>
+            </div>
+
+            <div className="flex justify-end gap-2">
+                <Button onClick={handleSkipBackup}>
+                    Skip for Now
+                </Button>
+                <Button type="primary" onClick={handleBackupNow}>
+                    Backup Now
+                </Button>
+            </div>
+        </Modal>
+    );
 };
