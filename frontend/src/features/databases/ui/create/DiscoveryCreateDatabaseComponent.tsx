@@ -77,15 +77,16 @@ export const DiscoveryCreateDatabaseComponent = ({ workspaceId, onCreated, onClo
         setStep('backup-config');
     };
 
-    const createAllDatabases = async () => {
+    const createAllDatabases = async (databaseWithNotifiers: Database) => {
         if (!serverConnection || selectedDatabases.length === 0) return;
 
         setIsCreating(true);
 
         try {
             // Create database configs for each selected database
+            // Use databaseWithNotifiers to ensure we have the latest notifiers from the form
             const databasesToCreate: Database[] = selectedDatabases.map((db) => ({
-                ...templateDatabase,
+                ...databaseWithNotifiers,
                 name: db.name,
                 postgresql: {
                     host: serverConnection.host,
@@ -233,7 +234,7 @@ export const DiscoveryCreateDatabaseComponent = ({ workspaceId, onCreated, onClo
                 onSaved={(database) => {
                     if (isCreating) return;
                     setTemplateDatabase({ ...database });
-                    createAllDatabases();
+                    createAllDatabases(database);
                 }}
             />
         );
