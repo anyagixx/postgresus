@@ -119,6 +119,7 @@ export function SignUpComponent({ onSwitchToSignIn }: SignUpComponentProps): JSX
           setNameError(false);
           setName(e.currentTarget.value);
         }}
+        onPressEnter={onSignUp}
         status={nameError ? 'error' : undefined}
       />
 
@@ -130,6 +131,7 @@ export function SignUpComponent({ onSwitchToSignIn }: SignUpComponentProps): JSX
           setEmailError(false);
           setEmail(e.currentTarget.value.trim().toLowerCase());
         }}
+        onPressEnter={onSignUp}
         status={isEmailError ? 'error' : undefined}
         type="email"
       />
@@ -142,6 +144,7 @@ export function SignUpComponent({ onSwitchToSignIn }: SignUpComponentProps): JSX
           setPasswordError(false);
           setPassword(e.currentTarget.value);
         }}
+        onPressEnter={onSignUp}
         status={passwordError ? 'error' : undefined}
         iconRender={(visible) => (visible ? <EyeTwoTone /> : <EyeInvisibleOutlined />)}
         visibilityToggle={{ visible: passwordVisible, onVisibleChange: setPasswordVisible }}
@@ -156,6 +159,7 @@ export function SignUpComponent({ onSwitchToSignIn }: SignUpComponentProps): JSX
           setConfirmPasswordError(false);
           setConfirmPassword(e.currentTarget.value);
         }}
+        onPressEnter={onSignUp}
         iconRender={(visible) => (visible ? <EyeTwoTone /> : <EyeInvisibleOutlined />)}
         visibilityToggle={{
           visible: confirmPasswordVisible,

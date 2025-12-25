@@ -88,6 +88,7 @@ export function SignInComponent({ onSwitchToSignUp }: SignInComponentProps): JSX
           setEmailError(false);
           setEmail(e.currentTarget.value.trim().toLowerCase());
         }}
+        onPressEnter={onSignIn}
         status={isEmailError ? 'error' : undefined}
         type="email"
       />
@@ -100,6 +101,7 @@ export function SignInComponent({ onSwitchToSignUp }: SignInComponentProps): JSX
           setPasswordError(false);
           setPassword(e.currentTarget.value);
         }}
+        onPressEnter={onSignIn}
         status={passwordError ? 'error' : undefined}
         iconRender={(visible) => (visible ? <EyeTwoTone /> : <EyeInvisibleOutlined />)}
         visibilityToggle={{ visible: passwordVisible, onVisibleChange: setPasswordVisible }}
