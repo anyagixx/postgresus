@@ -1,0 +1,32 @@
+services:
+  postgresus:
+    image: putopelatudo/postgresus:latest
+    container_name: postgresus
+    restart: unless-stopped
+    ports:
+      - "443:443" # HTTPS (основной)
+      - "4005:4005" # HTTP (перенаправляет на HTTPS)
+    volumes:
+      - postgresus-data:/postgresus-data
+    environment:
+      # HTTPS включён по умолчанию (самоподписанный сертификат)
+      - ENABLE_HTTPS=true
+      # Можно указать свои сертификаты:
+      # - TLS_CERT_PATH=/postgresus-data/certs/server.crt
+      # - TLS_KEY_PATH=/postgresus-data/certs/server.key
+    healthcheck:
+      test: [ "CMD", "curl", "-kf", "https://localhost/api/v1/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+volumes:
+  postgresus-data:
+    driver: local

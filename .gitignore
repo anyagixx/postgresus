@@ -1,0 +1,11 @@
+postgresus_data/
+postgresus-data/
+.env
+pgdata/
+# docker-compose.yml теперь включён в репозиторий
+node_modules/
+.idea
+/articles
+
+.DS_Store
+/scripts

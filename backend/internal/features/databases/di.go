@@ -1,0 +1,42 @@
+package databases
+
+import (
+	audit_logs "postgresus-backend/internal/features/audit_logs"
+	"postgresus-backend/internal/features/notifiers"
+	users_services "postgresus-backend/internal/features/users/services"
+	workspaces_services "postgresus-backend/internal/features/workspaces/services"
+	"postgresus-backend/internal/util/encryption"
+	"postgresus-backend/internal/util/logger"
+)
+
+var databaseRepository = &DatabaseRepository{}
+
+var databaseService = &DatabaseService{
+	databaseRepository,
+	notifiers.GetNotifierService(),
+	logger.GetLogger(),
+	[]DatabaseCreationListener{},
+	[]DatabaseRemoveListener{},
+	[]DatabaseCopyListener{},
+	workspaces_services.GetWorkspaceService(),
+	audit_logs.GetAuditLogService(),
+	encryption.GetFieldEncryptor(),
+}
+
+var databaseController = &DatabaseController{
+	databaseService,
+	users_services.GetUserService(),
+	workspaces_services.GetWorkspaceService(),
+}
+
+func GetDatabaseService() *DatabaseService {
+	return databaseService
+}
+
+func GetDatabaseController() *DatabaseController {
+	return databaseController
+}
+
+func SetupDependencies() {
+	workspaces_services.GetWorkspaceService().AddWorkspaceDeletionListener(databaseService)
+}

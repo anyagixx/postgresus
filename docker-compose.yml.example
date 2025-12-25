@@ -1,0 +1,46 @@
+version: "3.8"
+
+# Docker Compose configuration for Postgresus
+# ============================================
+# 
+# Features:
+# - HTTPS enabled by default with self-signed certificate
+# - HTTP requests on port 4005 automatically redirect to HTTPS
+# - Certificate is auto-generated on first run
+#
+# Usage:
+#   1. Copy this file to docker-compose.yml
+#   2. Run: docker compose up -d
+#   3. Access: https://localhost (accept the self-signed certificate)
+#
+# For production with custom certificate:
+#   Mount your certificates to /postgresus-data/certs/
+#   - server.crt (certificate)
+#   - server.key (private key)
+
+services:
+  postgresus:
+    image: putopelatudo/postgresus:latest
+    # Or build from source:
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    container_name: postgresus
+    ports:
+      - "443:443"     # HTTPS
+      - "4005:4005"   # HTTP (redirects to HTTPS)
+    volumes:
+      - ./postgresus-data:/postgresus-data
+    environment:
+      # HTTPS is enabled by default in production
+      - ENABLE_HTTPS=true
+      # Uncomment to change ports (default: 443 for HTTPS, 4005 for HTTP)
+      # - HTTPS_PORT=443
+      # - HTTP_PORT=4005
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-kf", "https://localhost/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
