@@ -1,11 +1,14 @@
 package databases
 
 import (
+	"context"
+	"log/slog"
 	"net/http"
 	"postgresus-backend/internal/features/databases/databases/postgresql"
 	users_middleware "postgresus-backend/internal/features/users/middleware"
 	users_services "postgresus-backend/internal/features/users/services"
 	workspaces_services "postgresus-backend/internal/features/workspaces/services"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -31,6 +34,7 @@ func (c *DatabaseController) RegisterRoutes(router *gin.RouterGroup) {
 	router.GET("/databases/notifier/:id/is-using", c.IsNotifierUsing)
 	router.POST("/databases/is-readonly", c.IsUserReadOnly)
 	router.POST("/databases/create-readonly-user", c.CreateReadOnlyUser)
+	router.POST("/databases/grant-readonly-access", c.GrantReadOnlyAccess)
 }
 
 // CreateDatabase
@@ -491,4 +495,70 @@ func (c *DatabaseController) CreateDatabaseBatch(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusCreated, createdDatabases)
+}
+
+// GrantReadOnlyAccess
+// @Summary Grant read-only access to multiple databases
+// @Description Grant read-only privileges to an existing user on multiple databases
+// @Tags databases
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body GrantReadOnlyAccessRequest true "Grant access request"
+// @Success 200 {object} GrantReadOnlyAccessResponse
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Router /databases/grant-readonly-access [post]
+func (c *DatabaseController) GrantReadOnlyAccess(ctx *gin.Context) {
+	_, ok := users_middleware.GetUserFromContext(ctx)
+	if !ok {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	var request GrantReadOnlyAccessRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(request.Databases) == 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "at least one database is required"})
+		return
+	}
+
+	logger := slog.Default()
+	grantCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	var grantedDatabases []string
+	var failedDatabases []string
+	var errors []string
+
+	for _, dbName := range request.Databases {
+		err := postgresql.GrantReadOnlyAccess(
+			grantCtx,
+			logger,
+			request.Host,
+			request.Port,
+			request.AdminUsername,
+			request.AdminPassword,
+			request.IsHttps,
+			dbName,
+			request.Username,
+		)
+		if err != nil {
+			failedDatabases = append(failedDatabases, dbName)
+			errors = append(errors, err.Error())
+		} else {
+			grantedDatabases = append(grantedDatabases, dbName)
+		}
+	}
+
+	ctx.JSON(http.StatusOK, GrantReadOnlyAccessResponse{
+		Success:          len(failedDatabases) == 0,
+		GrantedDatabases: grantedDatabases,
+		FailedDatabases:  failedDatabases,
+		Errors:           errors,
+	})
 }

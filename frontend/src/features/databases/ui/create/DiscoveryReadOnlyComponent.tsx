@@ -67,6 +67,23 @@ export const DiscoveryReadOnlyComponent = ({
             const tempDatabase = createTempDatabase();
             const response = await databaseApi.createReadOnlyUser(tempDatabase);
 
+            // Grant access to all selected databases (not just the first one)
+            if (selectedDatabases.length > 1) {
+                const grantResponse = await databaseApi.grantReadOnlyAccess({
+                    username: response.username,
+                    host: serverConnection.host,
+                    port: serverConnection.port,
+                    adminUsername: serverConnection.username,
+                    adminPassword: serverConnection.password,
+                    isHttps: serverConnection.isHttps,
+                    databases: selectedDatabases.slice(1).map(db => db.name), // Skip first, already has access
+                });
+
+                if (grantResponse.failedDatabases && grantResponse.failedDatabases.length > 0) {
+                    console.warn('Failed to grant access to some databases:', grantResponse.failedDatabases);
+                }
+            }
+
             // Update server connection with new credentials
             const updatedConnection: ServerConnection = {
                 ...serverConnection,

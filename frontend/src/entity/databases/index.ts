@@ -3,6 +3,8 @@ export {
     type ServerConnection,
     type DiscoveredDatabase,
     type DiscoverDatabasesResponse,
+    type GrantReadOnlyAccessRequest,
+    type GrantReadOnlyAccessResponse,
 } from './api/databaseApi';
 export { type Database } from './model/Database';
 export { DatabaseType } from './model/DatabaseType';

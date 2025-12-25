@@ -123,6 +123,15 @@ export const databaseApi = {
       requestOptions,
     );
   },
+
+  async grantReadOnlyAccess(request: GrantReadOnlyAccessRequest) {
+    const requestOptions: RequestOptions = new RequestOptions();
+    requestOptions.setBody(JSON.stringify(request));
+    return apiHelper.fetchPostJson<GrantReadOnlyAccessResponse>(
+      `${getApplicationServer()}/api/v1/databases/grant-readonly-access`,
+      requestOptions,
+    );
+  },
 };
 
 export interface ServerConnection {
@@ -141,4 +150,21 @@ export interface DiscoveredDatabase {
 
 export interface DiscoverDatabasesResponse {
   databases: DiscoveredDatabase[];
+}
+
+export interface GrantReadOnlyAccessRequest {
+  username: string;
+  host: string;
+  port: number;
+  adminUsername: string;
+  adminPassword: string;
+  isHttps: boolean;
+  databases: string[];
+}
+
+export interface GrantReadOnlyAccessResponse {
+  success: boolean;
+  grantedDatabases: string[];
+  failedDatabases: string[];
+  errors?: string[];
 }

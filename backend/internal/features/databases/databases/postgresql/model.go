@@ -581,6 +581,144 @@ func (p *PostgresqlDatabase) CreateReadOnlyUser(
 	return "", "", errors.New("failed to generate unique username after 3 attempts")
 }
 
+// GrantReadOnlyAccess grants read-only privileges to an existing user on a specific database.
+// This is used in Discovery flow to give the read-only user access to multiple databases.
+//
+// The method performs the following operations:
+// 1. Connects to the target database using admin credentials
+// 2. Grants CONNECT privilege on the database
+// 3. Grants USAGE on all non-system schemas
+// 4. Grants SELECT on all existing tables and sequences
+// 5. Sets default privileges for future tables and sequences
+func GrantReadOnlyAccess(
+	ctx context.Context,
+	logger *slog.Logger,
+	host string,
+	port int,
+	adminUsername string,
+	adminPassword string,
+	isHttps bool,
+	targetDatabase string,
+	readOnlyUsername string,
+) error {
+	sslMode := "disable"
+	if isHttps {
+		sslMode = "require"
+	}
+
+	connStr := fmt.Sprintf(
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s default_query_exec_mode=simple_protocol",
+		host,
+		port,
+		adminUsername,
+		adminPassword,
+		targetDatabase,
+		sslMode,
+	)
+
+	conn, err := pgx.Connect(ctx, connStr)
+	if err != nil {
+		return fmt.Errorf("failed to connect to database '%s': %w", targetDatabase, err)
+	}
+	defer func() {
+		if closeErr := conn.Close(ctx); closeErr != nil {
+			logger.Error("Failed to close connection", "error", closeErr)
+		}
+	}()
+
+	// Check if user exists
+	var userExists bool
+	err = conn.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname = $1)`, readOnlyUsername).Scan(&userExists)
+	if err != nil {
+		return fmt.Errorf("failed to check if user exists: %w", err)
+	}
+	if !userExists {
+		return fmt.Errorf("user '%s' does not exist", readOnlyUsername)
+	}
+
+	// Grant CONNECT on database
+	_, err = conn.Exec(ctx, fmt.Sprintf(`GRANT CONNECT ON DATABASE "%s" TO "%s"`, targetDatabase, readOnlyUsername))
+	if err != nil {
+		return fmt.Errorf("failed to grant connect on database: %w", err)
+	}
+
+	// Get all user schemas
+	rows, err := conn.Query(ctx, `
+		SELECT schema_name
+		FROM information_schema.schemata
+		WHERE schema_name NOT IN ('pg_catalog', 'information_schema')
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to get schemas: %w", err)
+	}
+
+	var schemas []string
+	for rows.Next() {
+		var schema string
+		if err := rows.Scan(&schema); err != nil {
+			rows.Close()
+			return fmt.Errorf("failed to scan schema: %w", err)
+		}
+		schemas = append(schemas, schema)
+	}
+	rows.Close()
+
+	// Grant USAGE on each schema
+	for _, schema := range schemas {
+		_, err = conn.Exec(ctx, fmt.Sprintf(`GRANT USAGE ON SCHEMA "%s" TO "%s"`, schema, readOnlyUsername))
+		if err != nil {
+			logger.Warn("Failed to grant usage on schema", "schema", schema, "error", err)
+		}
+	}
+
+	// Grant SELECT on all tables and sequences
+	grantSelectSQL := fmt.Sprintf(`
+		DO $$
+		DECLARE
+			schema_rec RECORD;
+		BEGIN
+			FOR schema_rec IN
+				SELECT schema_name
+				FROM information_schema.schemata
+				WHERE schema_name NOT IN ('pg_catalog', 'information_schema')
+			LOOP
+				EXECUTE format('GRANT SELECT ON ALL TABLES IN SCHEMA %%I TO "%s"', schema_rec.schema_name);
+				EXECUTE format('GRANT SELECT ON ALL SEQUENCES IN SCHEMA %%I TO "%s"', schema_rec.schema_name);
+			END LOOP;
+		END $$;
+	`, readOnlyUsername, readOnlyUsername)
+
+	_, err = conn.Exec(ctx, grantSelectSQL)
+	if err != nil {
+		return fmt.Errorf("failed to grant select on tables: %w", err)
+	}
+
+	// Set default privileges for future tables
+	defaultPrivilegesSQL := fmt.Sprintf(`
+		DO $$
+		DECLARE
+			schema_rec RECORD;
+		BEGIN
+			FOR schema_rec IN
+				SELECT schema_name
+				FROM information_schema.schemata
+				WHERE schema_name NOT IN ('pg_catalog', 'information_schema')
+			LOOP
+				EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %%I GRANT SELECT ON TABLES TO "%s"', schema_rec.schema_name);
+				EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %%I GRANT SELECT ON SEQUENCES TO "%s"', schema_rec.schema_name);
+			END LOOP;
+		END $$;
+	`, readOnlyUsername, readOnlyUsername)
+
+	_, err = conn.Exec(ctx, defaultPrivilegesSQL)
+	if err != nil {
+		logger.Warn("Failed to set default privileges", "database", targetDatabase, "error", err)
+	}
+
+	logger.Info("Granted read-only access", "database", targetDatabase, "username", readOnlyUsername)
+	return nil
+}
+
 // testSingleDatabaseConnection tests connection to a specific database for pg_dump
 func testSingleDatabaseConnection(
 	logger *slog.Logger,
