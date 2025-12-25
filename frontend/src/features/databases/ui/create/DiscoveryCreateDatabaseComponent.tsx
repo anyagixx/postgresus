@@ -139,6 +139,35 @@ export const DiscoveryCreateDatabaseComponent = ({ workspaceId, onCreated, onClo
         onClose();
     };
 
+    // Show backup choice modal when databases are created
+    if (showBackupModal) {
+        return (
+            <Modal
+                title="Databases Added Successfully!"
+                open={showBackupModal}
+                footer={null}
+                closable={false}
+                width={450}
+            >
+                <div className="mb-5">
+                    <p className="mb-3">
+                        <strong>{createdDatabaseIds.length} database{createdDatabaseIds.length !== 1 ? 's' : ''}</strong> have been added successfully.
+                    </p>
+                    <p>Would you like to create backup copies now?</p>
+                </div>
+
+                <div className="flex justify-end gap-2">
+                    <Button onClick={handleSkipBackup}>
+                        Skip for Now
+                    </Button>
+                    <Button type="primary" onClick={handleBackupNow}>
+                        Backup Now
+                    </Button>
+                </div>
+            </Modal>
+        );
+    }
+
     if (step === 'server-connection') {
         return (
             <ServerConnectionComponent
@@ -210,29 +239,5 @@ export const DiscoveryCreateDatabaseComponent = ({ workspaceId, onCreated, onClo
         );
     }
 
-    return (
-        <Modal
-            title="Databases Added Successfully!"
-            open={showBackupModal}
-            footer={null}
-            closable={false}
-            width={450}
-        >
-            <div className="mb-5">
-                <p className="mb-3">
-                    <strong>{createdDatabaseIds.length} database{createdDatabaseIds.length !== 1 ? 's' : ''}</strong> have been added successfully.
-                </p>
-                <p>Would you like to create backup copies now?</p>
-            </div>
-
-            <div className="flex justify-end gap-2">
-                <Button onClick={handleSkipBackup}>
-                    Skip for Now
-                </Button>
-                <Button type="primary" onClick={handleBackupNow}>
-                    Backup Now
-                </Button>
-            </div>
-        </Modal>
-    );
+    return null;
 };
