@@ -96,6 +96,7 @@ export function AdminPasswordComponent({
           setPasswordError(false);
           setPassword(e.currentTarget.value);
         }}
+        onPressEnter={onSetPassword}
         status={passwordError ? 'error' : undefined}
         iconRender={(visible) => (visible ? <EyeTwoTone /> : <EyeInvisibleOutlined />)}
         visibilityToggle={{ visible: passwordVisible, onVisibleChange: setPasswordVisible }}
@@ -111,6 +112,7 @@ export function AdminPasswordComponent({
           setConfirmPasswordError(false);
           setConfirmPassword(e.currentTarget.value);
         }}
+        onPressEnter={onSetPassword}
         iconRender={(visible) => (visible ? <EyeTwoTone /> : <EyeInvisibleOutlined />)}
         autoComplete="new-password"
         visibilityToggle={{
