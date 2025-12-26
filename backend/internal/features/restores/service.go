@@ -122,8 +122,16 @@ func (s *RestoreService) RestoreBackupWithAuth(
 		return err
 	}
 
-	// If TargetDatabaseId is provided, populate requestDTO with target database credentials
+	// If TargetDatabaseId is provided, populate requestDTO with target database config + owner credentials
 	if requestDTO.TargetDatabaseId != nil {
+		// Validate that restore credentials are provided
+		if requestDTO.RestoreUsername == nil || *requestDTO.RestoreUsername == "" {
+			return errors.New("restore username is required for restoring to a different database")
+		}
+		if requestDTO.RestorePassword == nil || *requestDTO.RestorePassword == "" {
+			return errors.New("restore password is required for restoring to a different database")
+		}
+
 		targetDatabase, err := s.databaseService.GetDatabaseByID(*requestDTO.TargetDatabaseId)
 		if err != nil {
 			return fmt.Errorf("failed to get target database: %w", err)
@@ -134,48 +142,34 @@ func (s *RestoreService) RestoreBackupWithAuth(
 			return errors.New("target database type must match backup database type")
 		}
 
-		// Use credentials from target database and decrypt password
+		// Use target database connection info but with owner credentials (not read-only)
 		switch database.Type {
 		case databases.DatabaseTypePostgres:
 			if targetDatabase.Postgresql != nil {
-				// Decrypt password before using
-				decryptedPassword, err := s.fieldEncryptor.Decrypt(targetDatabase.ID, targetDatabase.Postgresql.Password)
-				if err != nil {
-					return fmt.Errorf("failed to decrypt password: %w", err)
-				}
-				// Create a copy with decrypted password
 				pgCopy := *targetDatabase.Postgresql
-				pgCopy.Password = decryptedPassword
+				pgCopy.Username = *requestDTO.RestoreUsername
+				pgCopy.Password = *requestDTO.RestorePassword
 				requestDTO.PostgresqlDatabase = &pgCopy
 			}
 		case databases.DatabaseTypeMysql:
 			if targetDatabase.Mysql != nil {
-				decryptedPassword, err := s.fieldEncryptor.Decrypt(targetDatabase.ID, targetDatabase.Mysql.Password)
-				if err != nil {
-					return fmt.Errorf("failed to decrypt password: %w", err)
-				}
 				mysqlCopy := *targetDatabase.Mysql
-				mysqlCopy.Password = decryptedPassword
+				mysqlCopy.Username = *requestDTO.RestoreUsername
+				mysqlCopy.Password = *requestDTO.RestorePassword
 				requestDTO.MysqlDatabase = &mysqlCopy
 			}
 		case databases.DatabaseTypeMariadb:
 			if targetDatabase.Mariadb != nil {
-				decryptedPassword, err := s.fieldEncryptor.Decrypt(targetDatabase.ID, targetDatabase.Mariadb.Password)
-				if err != nil {
-					return fmt.Errorf("failed to decrypt password: %w", err)
-				}
 				mariadbCopy := *targetDatabase.Mariadb
-				mariadbCopy.Password = decryptedPassword
+				mariadbCopy.Username = *requestDTO.RestoreUsername
+				mariadbCopy.Password = *requestDTO.RestorePassword
 				requestDTO.MariadbDatabase = &mariadbCopy
 			}
 		case databases.DatabaseTypeMongodb:
 			if targetDatabase.Mongodb != nil {
-				decryptedPassword, err := s.fieldEncryptor.Decrypt(targetDatabase.ID, targetDatabase.Mongodb.Password)
-				if err != nil {
-					return fmt.Errorf("failed to decrypt password: %w", err)
-				}
 				mongodbCopy := *targetDatabase.Mongodb
-				mongodbCopy.Password = decryptedPassword
+				mongodbCopy.Username = *requestDTO.RestoreUsername
+				mongodbCopy.Password = *requestDTO.RestorePassword
 				requestDTO.MongodbDatabase = &mongodbCopy
 			}
 		}

@@ -1,6 +1,6 @@
 import { CopyOutlined, ExclamationCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import { CheckCircleOutlined } from '@ant-design/icons';
-import { App, Button, Modal, Radio, Select, Spin, Tooltip } from 'antd';
+import { App, Button, Input, Modal, Radio, Select, Spin, Tooltip } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useRef, useState } from 'react';
 
@@ -78,6 +78,10 @@ export const RestoresComponent = ({ database, backup, workspaceId }: Props) => {
   const [workspaceDatabases, setWorkspaceDatabases] = useState<Database[]>([]);
   const [selectedDatabaseId, setSelectedDatabaseId] = useState<string | undefined>();
   const [isLoadingDatabases, setIsLoadingDatabases] = useState(false);
+
+  // Credentials for restore (owner/superuser with full privileges)
+  const [restoreUsername, setRestoreUsername] = useState('');
+  const [restorePassword, setRestorePassword] = useState('');
 
   const isReloadInProgress = useRef(false);
 
@@ -176,16 +180,21 @@ export const RestoresComponent = ({ database, backup, workspaceId }: Props) => {
     };
 
     const handleRestoreFromSelected = async () => {
-      if (!selectedDatabaseId) return;
+      if (!selectedDatabaseId || !restoreUsername || !restorePassword) return;
 
       try {
-        // Send targetDatabaseId - backend will get credentials from its database
+        // Send targetDatabaseId with owner credentials for restore
         await restoreApi.restoreBackup({
           backupId: backup.id,
           targetDatabaseId: selectedDatabaseId,
+          restoreUsername: restoreUsername,
+          restorePassword: restorePassword,
         });
         await loadRestores();
         setIsShowRestore(false);
+        // Clear credentials after successful restore
+        setRestoreUsername('');
+        setRestorePassword('');
       } catch (e) {
         alert((e as Error).message);
       }
@@ -265,11 +274,39 @@ export const RestoresComponent = ({ database, backup, workspaceId }: Props) => {
                   </div>
                 )}
 
+                {selectedDatabaseId && (
+                  <div className="mb-4 p-3 rounded border border-blue-300 bg-blue-50 text-sm dark:border-blue-600 dark:bg-blue-900/30">
+                    <strong>ℹ️ Note:</strong> Restore requires a user with <strong>full privileges</strong> (database owner or superuser).
+                    The read-only backup user cannot perform restore operations.
+                  </div>
+                )}
+
+                {selectedDatabaseId && (
+                  <div className="mb-4 space-y-3">
+                    <div>
+                      <div className="mb-1 text-sm font-medium">Username (with full privileges):</div>
+                      <Input
+                        placeholder="e.g. postgres or db_owner"
+                        value={restoreUsername}
+                        onChange={(e) => setRestoreUsername(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <div className="mb-1 text-sm font-medium">Password:</div>
+                      <Input.Password
+                        placeholder="Password"
+                        value={restorePassword}
+                        onChange={(e) => setRestorePassword(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-2">
                   <Button onClick={() => setIsShowRestore(false)}>Cancel</Button>
                   <Button
                     type="primary"
-                    disabled={!selectedDatabaseId}
+                    disabled={!selectedDatabaseId || !restoreUsername || !restorePassword}
                     onClick={handleRestoreFromSelected}
                   >
                     Restore to Selected DB

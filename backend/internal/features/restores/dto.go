@@ -10,8 +10,13 @@ import (
 )
 
 type RestoreBackupRequest struct {
-	// TargetDatabaseId allows restoring to a different database by ID (uses stored credentials)
+	// TargetDatabaseId allows restoring to a different database by ID
 	TargetDatabaseId *uuid.UUID `json:"targetDatabaseId"`
+
+	// RestoreUsername and RestorePassword are credentials with full privileges (owner/superuser)
+	// Used when TargetDatabaseId is provided - these override the stored read-only credentials
+	RestoreUsername *string `json:"restoreUsername"`
+	RestorePassword *string `json:"restorePassword"`
 
 	// Manual restore credentials (used when TargetDatabaseId is not provided)
 	PostgresqlDatabase *postgresql.PostgresqlDatabase `json:"postgresqlDatabase"`

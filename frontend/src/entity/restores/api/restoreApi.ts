@@ -21,6 +21,8 @@ export const restoreApi = {
   async restoreBackup({
     backupId,
     targetDatabaseId,
+    restoreUsername,
+    restorePassword,
     postgresql,
     mysql,
     mariadb,
@@ -28,6 +30,8 @@ export const restoreApi = {
   }: {
     backupId: string;
     targetDatabaseId?: string;
+    restoreUsername?: string;
+    restorePassword?: string;
     postgresql?: PostgresqlDatabase;
     mysql?: MysqlDatabase;
     mariadb?: MariadbDatabase;
@@ -37,6 +41,8 @@ export const restoreApi = {
     requestOptions.setBody(
       JSON.stringify({
         targetDatabaseId: targetDatabaseId,
+        restoreUsername: restoreUsername,
+        restorePassword: restorePassword,
         postgresqlDatabase: postgresql,
         mysqlDatabase: mysql,
         mariadbDatabase: mariadb,
