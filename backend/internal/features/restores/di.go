@@ -5,6 +5,7 @@ import (
 	"postgresus-backend/internal/features/backups/backups"
 	backups_config "postgresus-backend/internal/features/backups/config"
 	"postgresus-backend/internal/features/databases"
+	"postgresus-backend/internal/features/notifiers"
 	"postgresus-backend/internal/features/restores/usecases"
 	"postgresus-backend/internal/features/storages"
 	workspaces_services "postgresus-backend/internal/features/workspaces/services"
@@ -24,6 +25,7 @@ var restoreService = &RestoreService{
 	workspaces_services.GetWorkspaceService(),
 	audit_logs.GetAuditLogService(),
 	encryption.GetFieldEncryptor(),
+	notifiers.GetNotifierService(),
 }
 var restoreController = &RestoreController{
 	restoreService,

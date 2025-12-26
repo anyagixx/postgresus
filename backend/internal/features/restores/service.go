@@ -8,6 +8,7 @@ import (
 	"postgresus-backend/internal/features/backups/backups"
 	backups_config "postgresus-backend/internal/features/backups/config"
 	"postgresus-backend/internal/features/databases"
+	"postgresus-backend/internal/features/notifiers"
 	"postgresus-backend/internal/features/restores/enums"
 	"postgresus-backend/internal/features/restores/models"
 	"postgresus-backend/internal/features/restores/usecases"
@@ -32,6 +33,7 @@ type RestoreService struct {
 	workspaceService     *workspaces_services.WorkspaceService
 	auditLogService      *audit_logs.AuditLogService
 	fieldEncryptor       encryption.FieldEncryptor
+	notifierService      *notifiers.NotifierService
 }
 
 func (s *RestoreService) OnBeforeBackupRemove(backup *backups.Backup) error {
@@ -302,9 +304,12 @@ func (s *RestoreService) RestoreBackup(
 		restore.Status = enums.RestoreStatusFailed
 		restore.RestoreDurationMs = time.Since(start).Milliseconds()
 
-		if err := s.restoreRepository.Save(&restore); err != nil {
-			return err
+		if saveErr := s.restoreRepository.Save(&restore); saveErr != nil {
+			return saveErr
 		}
+
+		// Send notification about failed restore
+		s.sendRestoreNotification(database, &restore, false, err.Error())
 
 		return err
 	}
@@ -315,6 +320,9 @@ func (s *RestoreService) RestoreBackup(
 	if err := s.restoreRepository.Save(&restore); err != nil {
 		return err
 	}
+
+	// Send notification about successful restore
+	s.sendRestoreNotification(database, &restore, true, "")
 
 	return nil
 }
@@ -416,4 +424,41 @@ func (s *RestoreService) validateVersionCompatibility(
 		}
 	}
 	return nil
+}
+
+// sendRestoreNotification sends notification to all database notifiers about restore status
+func (s *RestoreService) sendRestoreNotification(
+	database *databases.Database,
+	restore *models.Restore,
+	isSuccess bool,
+	errorMessage string,
+) {
+	if s.notifierService == nil {
+		return
+	}
+
+	// Get notifiers for this database
+	dbNotifiers := database.Notifiers
+	if len(dbNotifiers) == 0 {
+		return
+	}
+
+	var title, message string
+	if isSuccess {
+		title = fmt.Sprintf("✅ Restore completed: %s", database.Name)
+		// Format duration
+		totalMs := restore.RestoreDurationMs
+		minutes := totalMs / (1000 * 60)
+		seconds := (totalMs % (1000 * 60)) / 1000
+		durationStr := fmt.Sprintf("%dm %ds", minutes, seconds)
+		message = fmt.Sprintf("Database restore completed successfully in %s.", durationStr)
+	} else {
+		title = fmt.Sprintf("❌ Restore failed: %s", database.Name)
+		message = fmt.Sprintf("Restore failed: %s", errorMessage)
+	}
+
+	// Send notification to all notifiers
+	for _, notifier := range dbNotifiers {
+		s.notifierService.SendNotification(&notifier, title, message)
+	}
 }
