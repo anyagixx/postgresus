@@ -134,16 +134,50 @@ func (s *RestoreService) RestoreBackupWithAuth(
 			return errors.New("target database type must match backup database type")
 		}
 
-		// Use credentials from target database
+		// Use credentials from target database and decrypt password
 		switch database.Type {
 		case databases.DatabaseTypePostgres:
-			requestDTO.PostgresqlDatabase = targetDatabase.Postgresql
+			if targetDatabase.Postgresql != nil {
+				// Decrypt password before using
+				decryptedPassword, err := s.fieldEncryptor.Decrypt(targetDatabase.ID, targetDatabase.Postgresql.Password)
+				if err != nil {
+					return fmt.Errorf("failed to decrypt password: %w", err)
+				}
+				// Create a copy with decrypted password
+				pgCopy := *targetDatabase.Postgresql
+				pgCopy.Password = decryptedPassword
+				requestDTO.PostgresqlDatabase = &pgCopy
+			}
 		case databases.DatabaseTypeMysql:
-			requestDTO.MysqlDatabase = targetDatabase.Mysql
+			if targetDatabase.Mysql != nil {
+				decryptedPassword, err := s.fieldEncryptor.Decrypt(targetDatabase.ID, targetDatabase.Mysql.Password)
+				if err != nil {
+					return fmt.Errorf("failed to decrypt password: %w", err)
+				}
+				mysqlCopy := *targetDatabase.Mysql
+				mysqlCopy.Password = decryptedPassword
+				requestDTO.MysqlDatabase = &mysqlCopy
+			}
 		case databases.DatabaseTypeMariadb:
-			requestDTO.MariadbDatabase = targetDatabase.Mariadb
+			if targetDatabase.Mariadb != nil {
+				decryptedPassword, err := s.fieldEncryptor.Decrypt(targetDatabase.ID, targetDatabase.Mariadb.Password)
+				if err != nil {
+					return fmt.Errorf("failed to decrypt password: %w", err)
+				}
+				mariadbCopy := *targetDatabase.Mariadb
+				mariadbCopy.Password = decryptedPassword
+				requestDTO.MariadbDatabase = &mariadbCopy
+			}
 		case databases.DatabaseTypeMongodb:
-			requestDTO.MongodbDatabase = targetDatabase.Mongodb
+			if targetDatabase.Mongodb != nil {
+				decryptedPassword, err := s.fieldEncryptor.Decrypt(targetDatabase.ID, targetDatabase.Mongodb.Password)
+				if err != nil {
+					return fmt.Errorf("failed to decrypt password: %w", err)
+				}
+				mongodbCopy := *targetDatabase.Mongodb
+				mongodbCopy.Password = decryptedPassword
+				requestDTO.MongodbDatabase = &mongodbCopy
+			}
 		}
 	}
 
