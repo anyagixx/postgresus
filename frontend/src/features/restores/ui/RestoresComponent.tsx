@@ -212,8 +212,8 @@ export const RestoresComponent = ({ database, backup, workspaceId }: Props) => {
               }
             }}
           >
-            <Radio value="manual">Enter credentials manually</Radio>
             <Radio value="select">Select from workspace databases</Radio>
+            <Radio value="manual">Enter credentials manually</Radio>
           </Radio.Group>
         </div>
 
