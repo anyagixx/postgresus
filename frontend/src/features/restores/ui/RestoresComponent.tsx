@@ -1,11 +1,11 @@
 import { CopyOutlined, ExclamationCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import { CheckCircleOutlined } from '@ant-design/icons';
-import { App, Button, Modal, Spin, Tooltip } from 'antd';
+import { App, Button, Modal, Radio, Select, Spin, Tooltip } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useRef, useState } from 'react';
 
 import type { Backup } from '../../../entity/backups';
-import { type Database, DatabaseType } from '../../../entity/databases';
+import { type Database, DatabaseType, databaseApi } from '../../../entity/databases';
 import { type Restore, RestoreStatus, restoreApi } from '../../../entity/restores';
 import { getUserTimeFormat } from '../../../shared/time';
 import { EditDatabaseSpecificDataComponent } from '../../databases/ui/edit/EditDatabaseSpecificDataComponent';
@@ -13,7 +13,10 @@ import { EditDatabaseSpecificDataComponent } from '../../databases/ui/edit/EditD
 interface Props {
   database: Database;
   backup: Backup;
+  workspaceId: string;
 }
+
+type RestoreMode = 'manual' | 'select';
 
 type DatabaseCredentials = {
   username?: string;
@@ -56,7 +59,7 @@ const getRestorePayload = (database: Database, editingDatabase: Database) => {
   }
 };
 
-export const RestoresComponent = ({ database, backup }: Props) => {
+export const RestoresComponent = ({ database, backup, workspaceId }: Props) => {
   const { message } = App.useApp();
 
   const [editingDatabase, setEditingDatabase] = useState<Database>(
@@ -69,6 +72,12 @@ export const RestoresComponent = ({ database, backup }: Props) => {
   const [showingRestoreError, setShowingRestoreError] = useState<Restore | undefined>();
 
   const [isShowRestore, setIsShowRestore] = useState(false);
+
+  // New state for restore mode and database selection
+  const [restoreMode, setRestoreMode] = useState<RestoreMode>('manual');
+  const [workspaceDatabases, setWorkspaceDatabases] = useState<Database[]>([]);
+  const [selectedDatabaseId, setSelectedDatabaseId] = useState<string | undefined>();
+  const [isLoadingDatabases, setIsLoadingDatabases] = useState(false);
 
   const isReloadInProgress = useRef(false);
 
@@ -87,6 +96,43 @@ export const RestoresComponent = ({ database, backup }: Props) => {
     }
 
     isReloadInProgress.current = false;
+  };
+
+  // Helper to get host:port from database
+  const getHostPort = (db: Database): string => {
+    switch (db.type) {
+      case DatabaseType.POSTGRES:
+        return `${db.postgresql?.host}:${db.postgresql?.port}`;
+      case DatabaseType.MYSQL:
+        return `${db.mysql?.host}:${db.mysql?.port}`;
+      case DatabaseType.MARIADB:
+        return `${db.mariadb?.host}:${db.mariadb?.port}`;
+      case DatabaseType.MONGODB:
+        return `${db.mongodb?.host}:${db.mongodb?.port}`;
+      default:
+        return '';
+    }
+  };
+
+  // Load workspace databases filtered by same server (host:port)
+  const loadWorkspaceDatabases = async () => {
+    setIsLoadingDatabases(true);
+    try {
+      const allDatabases = await databaseApi.getDatabases(workspaceId);
+      const sourceHostPort = getHostPort(database);
+
+      // Filter to same type and same server, exclude current database
+      const sameSeverDatabases = allDatabases.filter(
+        (db) => db.type === database.type &&
+          getHostPort(db) === sourceHostPort &&
+          db.id !== database.id
+      );
+
+      setWorkspaceDatabases(sameSeverDatabases);
+    } catch (e) {
+      console.error('Failed to load databases:', e);
+    }
+    setIsLoadingDatabases(false);
   };
 
   const restore = async (editingDatabase: Database) => {
@@ -119,31 +165,111 @@ export const RestoresComponent = ({ database, backup }: Props) => {
   );
 
   if (isShowRestore) {
+    // Handle database selection and restore
+    const handleSelectDatabase = (databaseId: string) => {
+      setSelectedDatabaseId(databaseId);
+      const selectedDb = workspaceDatabases.find((db) => db.id === databaseId);
+      if (selectedDb) {
+        // Copy credentials from selected database
+        setEditingDatabase({ ...editingDatabase, ...selectedDb });
+      }
+    };
+
+    const handleRestoreFromSelected = () => {
+      const selectedDb = workspaceDatabases.find((db) => db.id === selectedDatabaseId);
+      if (selectedDb) {
+        restore(selectedDb);
+      }
+    };
+
     return (
       <>
-        <div className="my-5 text-sm">
-          Enter info of the database we will restore backup to.{' '}
-          <u>The empty database for restore should be created before the restore</u>. During the
-          restore, all the current data will be cleared
-          <br />
-          <br />
-          Make sure the database is not used right now (most likely you do not want to restore the
-          data to the same DB where the backup was made)
+        <div className="my-4">
+          <Radio.Group
+            value={restoreMode}
+            onChange={(e) => {
+              setRestoreMode(e.target.value);
+              if (e.target.value === 'select') {
+                loadWorkspaceDatabases();
+              }
+            }}
+          >
+            <Radio value="manual">Enter credentials manually</Radio>
+            <Radio value="select">Select from workspace databases</Radio>
+          </Radio.Group>
         </div>
 
-        <EditDatabaseSpecificDataComponent
-          database={editingDatabase}
-          onCancel={() => setIsShowRestore(false)}
-          isShowBackButton={false}
-          onBack={() => setIsShowRestore(false)}
-          saveButtonText="Restore to this DB"
-          isSaveToApi={false}
-          onSaved={(database) => {
-            setEditingDatabase({ ...database });
-            restore(database);
-          }}
-          isRestoreMode={true}
-        />
+        {restoreMode === 'manual' && (
+          <>
+            <div className="my-3 text-sm">
+              Enter info of the database we will restore backup to.{' '}
+              <u>The empty database for restore should be created before the restore</u>. During the
+              restore, all the current data will be cleared.
+            </div>
+
+            <EditDatabaseSpecificDataComponent
+              database={editingDatabase}
+              onCancel={() => setIsShowRestore(false)}
+              isShowBackButton={false}
+              onBack={() => setIsShowRestore(false)}
+              saveButtonText="Restore to this DB"
+              isSaveToApi={false}
+              onSaved={(database) => {
+                setEditingDatabase({ ...database });
+                restore(database);
+              }}
+              isRestoreMode={true}
+            />
+          </>
+        )}
+
+        {restoreMode === 'select' && (
+          <div className="my-3">
+            {isLoadingDatabases ? (
+              <div className="flex justify-center py-4">
+                <Spin />
+              </div>
+            ) : workspaceDatabases.length === 0 ? (
+              <div className="py-4 text-center text-gray-500">
+                No other databases found on the same server ({getHostPort(database)})
+              </div>
+            ) : (
+              <>
+                <div className="mb-3 text-sm">
+                  Select a database on the server <strong>{getHostPort(database)}</strong> to restore to:
+                </div>
+
+                <Select
+                  className="w-full mb-4"
+                  placeholder="Select target database"
+                  value={selectedDatabaseId}
+                  onChange={handleSelectDatabase}
+                  options={workspaceDatabases.map((db) => ({
+                    value: db.id,
+                    label: db.name,
+                  }))}
+                />
+
+                {selectedDatabaseId && (
+                  <div className="mb-4 p-3 rounded border border-yellow-300 bg-yellow-50 text-sm dark:border-yellow-600 dark:bg-yellow-900/30">
+                    <strong>⚠️ Warning:</strong> This will OVERWRITE all data in database "{workspaceDatabases.find((db) => db.id === selectedDatabaseId)?.name}"
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button onClick={() => setIsShowRestore(false)}>Cancel</Button>
+                  <Button
+                    type="primary"
+                    disabled={!selectedDatabaseId}
+                    onClick={handleRestoreFromSelected}
+                  >
+                    Restore to Selected DB
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </>
     );
   }

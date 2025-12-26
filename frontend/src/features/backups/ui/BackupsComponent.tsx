@@ -714,6 +714,7 @@ export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef,
           <RestoresComponent
             database={database}
             backup={backups.find((b) => b.id === showingRestoresBackupId) as Backup}
+            workspaceId={workspaceId || ''}
           />
         </Modal>
       )}
