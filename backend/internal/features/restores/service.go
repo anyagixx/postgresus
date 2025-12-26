@@ -158,6 +158,31 @@ func (s *RestoreService) RestoreBackup(
 		return err
 	}
 
+	// If TargetDatabaseId is provided, get credentials from that database
+	if requestDTO.TargetDatabaseId != nil {
+		targetDatabase, err := s.databaseService.GetDatabaseByID(*requestDTO.TargetDatabaseId)
+		if err != nil {
+			return fmt.Errorf("failed to get target database: %w", err)
+		}
+
+		// Verify same type
+		if targetDatabase.Type != database.Type {
+			return errors.New("target database type must match backup database type")
+		}
+
+		// Use credentials from target database (with decrypted password)
+		switch database.Type {
+		case databases.DatabaseTypePostgres:
+			requestDTO.PostgresqlDatabase = targetDatabase.Postgresql
+		case databases.DatabaseTypeMysql:
+			requestDTO.MysqlDatabase = targetDatabase.Mysql
+		case databases.DatabaseTypeMariadb:
+			requestDTO.MariadbDatabase = targetDatabase.Mariadb
+		case databases.DatabaseTypeMongodb:
+			requestDTO.MongodbDatabase = targetDatabase.Mongodb
+		}
+	}
+
 	switch database.Type {
 	case databases.DatabaseTypePostgres:
 		if requestDTO.PostgresqlDatabase == nil {

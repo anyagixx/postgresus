@@ -175,51 +175,19 @@ export const RestoresComponent = ({ database, backup, workspaceId }: Props) => {
       }
     };
 
-    const handleRestoreFromSelected = () => {
-      const selectedDb = workspaceDatabases.find((db) => db.id === selectedDatabaseId);
-      if (selectedDb) {
-        // Use credentials (username/password) from source database since
-        // databases on the same server share the same read-only user
-        const dbWithSourceCredentials = { ...selectedDb };
-        switch (database.type) {
-          case DatabaseType.POSTGRES:
-            if (dbWithSourceCredentials.postgresql && database.postgresql) {
-              dbWithSourceCredentials.postgresql = {
-                ...dbWithSourceCredentials.postgresql,
-                username: database.postgresql.username,
-                password: database.postgresql.password,
-              };
-            }
-            break;
-          case DatabaseType.MYSQL:
-            if (dbWithSourceCredentials.mysql && database.mysql) {
-              dbWithSourceCredentials.mysql = {
-                ...dbWithSourceCredentials.mysql,
-                username: database.mysql.username,
-                password: database.mysql.password,
-              };
-            }
-            break;
-          case DatabaseType.MARIADB:
-            if (dbWithSourceCredentials.mariadb && database.mariadb) {
-              dbWithSourceCredentials.mariadb = {
-                ...dbWithSourceCredentials.mariadb,
-                username: database.mariadb.username,
-                password: database.mariadb.password,
-              };
-            }
-            break;
-          case DatabaseType.MONGODB:
-            if (dbWithSourceCredentials.mongodb && database.mongodb) {
-              dbWithSourceCredentials.mongodb = {
-                ...dbWithSourceCredentials.mongodb,
-                username: database.mongodb.username,
-                password: database.mongodb.password,
-              };
-            }
-            break;
-        }
-        restore(dbWithSourceCredentials);
+    const handleRestoreFromSelected = async () => {
+      if (!selectedDatabaseId) return;
+
+      try {
+        // Send targetDatabaseId - backend will get credentials from its database
+        await restoreApi.restoreBackup({
+          backupId: backup.id,
+          targetDatabaseId: selectedDatabaseId,
+        });
+        await loadRestores();
+        setIsShowRestore(false);
+      } catch (e) {
+        alert((e as Error).message);
       }
     };
 
