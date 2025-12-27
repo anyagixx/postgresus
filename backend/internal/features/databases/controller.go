@@ -501,6 +501,7 @@ func (c *DatabaseController) CreateDatabaseBatch(ctx *gin.Context) {
 		dbType := string(request.Databases[0].Type)
 
 		// Create or get server directly to avoid circular dependency
+		var err error
 		serverID, err = c.createOrGetServer(
 			request.WorkspaceID,
 			request.ServerName,
