@@ -25,7 +25,7 @@ type Database struct {
 
 	// ServerID links this database to a server (optional for backward compatibility)
 	ServerID   *uuid.UUID `json:"serverId,omitempty"   gorm:"column:server_id;type:uuid"`
-	ServerName string     `json:"serverName,omitempty" gorm:"-"` // Populated from join, not stored`
+	ServerName string     `json:"serverName,omitempty" gorm:"column:server_name;->"` // Populated from join, read-only
 
 	Postgresql *postgresql.PostgresqlDatabase `json:"postgresql,omitempty" gorm:"foreignKey:DatabaseID"`
 	Mysql      *mysql.MysqlDatabase           `json:"mysql,omitempty"      gorm:"foreignKey:DatabaseID"`
