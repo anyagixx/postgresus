@@ -11,12 +11,15 @@ import {
   databaseApi,
   getDatabaseLogoFromType,
 } from '../../../../entity/databases';
+import { type Server, serverApi } from '../../../../entity/servers';
 
 interface Props {
   database: Database;
+  workspaceId?: string;
 
   isShowName?: boolean;
   isShowType?: boolean;
+  isShowServer?: boolean;
   isShowCancelButton?: boolean;
   onCancel: () => void;
 
@@ -34,8 +37,10 @@ const databaseTypeOptions = [
 
 export const EditDatabaseBaseInfoComponent = ({
   database,
+  workspaceId,
   isShowName,
   isShowType,
+  isShowServer,
   isShowCancelButton,
   onCancel,
   saveButtonText,
@@ -45,6 +50,13 @@ export const EditDatabaseBaseInfoComponent = ({
   const [editingDatabase, setEditingDatabase] = useState<Database>();
   const [isUnsaved, setIsUnsaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [servers, setServers] = useState<Server[]>([]);
+
+  useEffect(() => {
+    if (workspaceId && isShowServer) {
+      serverApi.getServers(workspaceId).then(setServers).catch(console.error);
+    }
+  }, [workspaceId, isShowServer]);
 
   const updateDatabase = (patch: Partial<Database>) => {
     setEditingDatabase((prev) => (prev ? { ...prev, ...patch } : prev));
@@ -110,6 +122,11 @@ export const EditDatabaseBaseInfoComponent = ({
 
   const isAllFieldsFilled = !!editingDatabase.name?.trim();
 
+  const serverOptions = [
+    { value: '', label: 'No server (ungrouped)' },
+    ...servers.map((s) => ({ value: s.id, label: s.name })),
+  ];
+
   return (
     <div>
       {isShowName && (
@@ -144,6 +161,19 @@ export const EditDatabaseBaseInfoComponent = ({
               className="ml-2 h-4 w-4"
             />
           </div>
+        </div>
+      )}
+
+      {isShowServer && servers.length > 0 && (
+        <div className="mb-1 flex w-full items-center">
+          <div className="min-w-[150px]">Server</div>
+          <Select
+            value={editingDatabase.serverId || ''}
+            onChange={(value) => updateDatabase({ serverId: value || undefined })}
+            options={serverOptions}
+            size="small"
+            className="w-[200px] grow"
+          />
         </div>
       )}
 

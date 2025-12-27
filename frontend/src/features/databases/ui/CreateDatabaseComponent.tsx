@@ -100,8 +100,10 @@ export const CreateDatabaseComponent = ({ workspaceId, onCreated, onClose }: Pro
       <div>
         <EditDatabaseBaseInfoComponent
           database={database}
+          workspaceId={workspaceId}
           isShowName
           isShowType
+          isShowServer
           isSaveToApi={false}
           saveButtonText="Continue"
           onCancel={() => onClose()}
