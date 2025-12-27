@@ -23,6 +23,10 @@ type Database struct {
 	Name        string       `json:"name"        gorm:"column:name;type:text;not null"`
 	Type        DatabaseType `json:"type"        gorm:"column:type;type:text;not null"`
 
+	// ServerID links this database to a server (optional for backward compatibility)
+	ServerID   *uuid.UUID `json:"serverId,omitempty"   gorm:"column:server_id;type:uuid"`
+	ServerName string     `json:"serverName,omitempty" gorm:"-"` // Populated from join, not stored`
+
 	Postgresql *postgresql.PostgresqlDatabase `json:"postgresql,omitempty" gorm:"foreignKey:DatabaseID"`
 	Mysql      *mysql.MysqlDatabase           `json:"mysql,omitempty"      gorm:"foreignKey:DatabaseID"`
 	Mariadb    *mariadb.MariadbDatabase       `json:"mariadb,omitempty"    gorm:"foreignKey:DatabaseID"`
@@ -127,6 +131,7 @@ func (d *Database) Update(incoming *Database) {
 	d.Name = incoming.Name
 	d.Type = incoming.Type
 	d.Notifiers = incoming.Notifiers
+	d.ServerID = incoming.ServerID
 
 	switch d.Type {
 	case DatabaseTypePostgres:

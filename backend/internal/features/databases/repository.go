@@ -133,12 +133,15 @@ func (r *DatabaseRepository) FindByID(id uuid.UUID) (*Database, error) {
 
 	if err := storage.
 		GetDb().
+		Table("databases").
+		Select("databases.*, servers.name as server_name").
+		Joins("LEFT JOIN servers ON databases.server_id = servers.id").
 		Preload("Postgresql").
 		Preload("Mysql").
 		Preload("Mariadb").
 		Preload("Mongodb").
 		Preload("Notifiers").
-		Where("id = ?", id).
+		Where("databases.id = ?", id).
 		First(&database).Error; err != nil {
 		return nil, err
 	}
@@ -151,13 +154,16 @@ func (r *DatabaseRepository) FindByWorkspaceID(workspaceID uuid.UUID) ([]*Databa
 
 	if err := storage.
 		GetDb().
+		Table("databases").
+		Select("databases.*, servers.name as server_name").
+		Joins("LEFT JOIN servers ON databases.server_id = servers.id").
 		Preload("Postgresql").
 		Preload("Mysql").
 		Preload("Mariadb").
 		Preload("Mongodb").
 		Preload("Notifiers").
-		Where("workspace_id = ?", workspaceID).
-		Order("CASE WHEN health_status = 'UNAVAILABLE' THEN 1 WHEN health_status = 'AVAILABLE' THEN 2 WHEN health_status IS NULL THEN 3 ELSE 4 END, name ASC").
+		Where("databases.workspace_id = ?", workspaceID).
+		Order("CASE WHEN databases.health_status = 'UNAVAILABLE' THEN 1 WHEN databases.health_status = 'AVAILABLE' THEN 2 WHEN databases.health_status IS NULL THEN 3 ELSE 4 END, servers.name ASC NULLS LAST, databases.name ASC").
 		Find(&databases).Error; err != nil {
 		return nil, err
 	}
@@ -232,11 +238,15 @@ func (r *DatabaseRepository) GetAllDatabases() ([]*Database, error) {
 
 	if err := storage.
 		GetDb().
+		Table("databases").
+		Select("databases.*, servers.name as server_name").
+		Joins("LEFT JOIN servers ON databases.server_id = servers.id").
 		Preload("Postgresql").
 		Preload("Mysql").
 		Preload("Mariadb").
 		Preload("Mongodb").
 		Preload("Notifiers").
+		Order("servers.name ASC NULLS LAST, databases.name ASC").
 		Find(&databases).Error; err != nil {
 		return nil, err
 	}
