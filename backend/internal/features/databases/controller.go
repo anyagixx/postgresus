@@ -500,8 +500,8 @@ func (c *DatabaseController) CreateDatabaseBatch(ctx *gin.Context) {
 		}
 		dbType := string(request.Databases[0].Type)
 
-		// Get server service lazily to avoid circular dependency
-		server, err := getServerServiceForBatchCreate(
+		// Create or get server directly to avoid circular dependency
+		serverID, err = c.createOrGetServer(
 			request.WorkspaceID,
 			request.ServerName,
 			dbType,
@@ -515,7 +515,6 @@ func (c *DatabaseController) CreateDatabaseBatch(ctx *gin.Context) {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": "failed to create server: " + err.Error()})
 			return
 		}
-		serverID = &server.ID
 	}
 
 	var createdDatabases []*Database
