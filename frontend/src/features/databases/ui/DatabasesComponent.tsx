@@ -54,7 +54,7 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
 
     setRenameModal(prev => ({ ...prev, loading: true }));
     try {
-      await serverApi.renameServer(workspace.id, renameModal.serverId, renameModal.newName.trim());
+      await serverApi.renameServer(renameModal.serverId, renameModal.newName.trim());
       message.success('Server renamed successfully!');
       setRenameModal({ open: false, serverId: null, currentName: '', newName: '', loading: false });
       loadDatabases(true); // Reload to get updated server names

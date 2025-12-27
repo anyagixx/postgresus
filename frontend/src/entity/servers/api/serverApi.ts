@@ -26,39 +26,39 @@ export const serverApi = {
     async getServers(workspaceId: string) {
         const requestOptions: RequestOptions = new RequestOptions();
         return apiHelper.fetchGetJson<Server[]>(
-            `${getApplicationServer()}/api/v1/workspaces/${workspaceId}/servers`,
+            `${getApplicationServer()}/api/v1/servers?workspace_id=${workspaceId}`,
             requestOptions,
             true,
         );
     },
 
-    async getServer(workspaceId: string, serverId: string) {
+    async getServer(serverId: string) {
         const requestOptions: RequestOptions = new RequestOptions();
         return apiHelper.fetchGetJson<Server>(
-            `${getApplicationServer()}/api/v1/workspaces/${workspaceId}/servers/${serverId}`,
+            `${getApplicationServer()}/api/v1/servers/${serverId}`,
             requestOptions,
             true,
         );
     },
 
-    async updateServer(workspaceId: string, serverId: string, data: UpdateServerRequest) {
+    async updateServer(serverId: string, data: UpdateServerRequest) {
         const requestOptions: RequestOptions = new RequestOptions();
         requestOptions.setBody(JSON.stringify(data));
         return apiHelper.fetchPutJson<Server>(
-            `${getApplicationServer()}/api/v1/workspaces/${workspaceId}/servers/${serverId}`,
+            `${getApplicationServer()}/api/v1/servers/${serverId}`,
             requestOptions,
         );
     },
 
-    async deleteServer(workspaceId: string, serverId: string) {
+    async deleteServer(serverId: string) {
         const requestOptions: RequestOptions = new RequestOptions();
         return apiHelper.fetchDeleteRaw(
-            `${getApplicationServer()}/api/v1/workspaces/${workspaceId}/servers/${serverId}`,
+            `${getApplicationServer()}/api/v1/servers/${serverId}`,
             requestOptions,
         );
     },
 
-    async renameServer(workspaceId: string, serverId: string, newName: string) {
-        return this.updateServer(workspaceId, serverId, { name: newName });
+    async renameServer(serverId: string, newName: string) {
+        return this.updateServer(serverId, { name: newName });
     },
 };
