@@ -164,16 +164,20 @@ export const EditDatabaseBaseInfoComponent = ({
         </div>
       )}
 
-      {isShowServer && servers.length > 0 && (
+      {isShowServer && (
         <div className="mb-1 flex w-full items-center">
           <div className="min-w-[150px]">Server</div>
-          <Select
-            value={editingDatabase.serverId || ''}
-            onChange={(value) => updateDatabase({ serverId: value || undefined })}
-            options={serverOptions}
-            size="small"
-            className="w-[200px] grow"
-          />
+          {servers.length > 0 ? (
+            <Select
+              value={editingDatabase.serverId || ''}
+              onChange={(value) => updateDatabase({ serverId: value || undefined })}
+              options={serverOptions}
+              size="small"
+              className="w-[200px] grow"
+            />
+          ) : (
+            <span className="text-sm text-gray-400">No servers available</span>
+          )}
         </div>
       )}
 

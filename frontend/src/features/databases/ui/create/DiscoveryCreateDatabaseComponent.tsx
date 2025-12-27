@@ -105,6 +105,7 @@ export const DiscoveryCreateDatabaseComponent = ({ workspaceId, onCreated, onClo
             }));
 
             // Batch create all databases with server info
+            console.log('DEBUG createDatabaseBatch:', { serverConnection, serverName, workspaceId });
             const createdDatabases = await databaseApi.createDatabaseBatch(
                 workspaceId,
                 databasesToCreate,
