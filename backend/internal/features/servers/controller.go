@@ -245,7 +245,7 @@ func (c *ServerController) DeleteServer(ctx *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param serverId path string true "Server ID"
-// @Success 200 {array} databases.Database
+// @Success 200 {array} map[string]interface{}
 // @Failure 400 {object} map[string]string
 // @Router /api/v1/workspaces/{workspaceId}/servers/{serverId}/linked-databases [get]
 func (c *ServerController) GetLinkedDatabases(ctx *gin.Context) {
