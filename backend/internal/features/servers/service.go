@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"time"
 
-	"postgresus-backend/internal/features/databases"
 	"postgresus-backend/internal/features/databases/databases/postgresql"
 	users_models "postgresus-backend/internal/features/users/models"
 	"postgresus-backend/internal/util/encryption"
@@ -125,7 +124,7 @@ func (s *ServerService) GetServers(
 func (s *ServerService) GetOrCreateServerByHostPort(
 	workspaceID uuid.UUID,
 	name string,
-	dbType databases.DatabaseType,
+	dbType string,
 	host string,
 	port int,
 	username string,
@@ -168,7 +167,7 @@ func (s *ServerService) TestConnection(
 	user *users_models.User,
 	server *Server,
 ) error {
-	if server.Type != databases.DatabaseTypePostgres {
+	if server.Type != "postgresql" {
 		return errors.New("only PostgreSQL server connection test is currently supported")
 	}
 
@@ -202,7 +201,7 @@ func (s *ServerService) DiscoverDatabases(
 	user *users_models.User,
 	server *Server,
 ) ([]postgresql.DatabaseInfo, error) {
-	if server.Type != databases.DatabaseTypePostgres {
+	if server.Type != "postgresql" {
 		return nil, errors.New("only PostgreSQL database discovery is currently supported")
 	}
 

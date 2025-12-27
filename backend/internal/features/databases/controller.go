@@ -499,7 +499,7 @@ func (c *DatabaseController) CreateDatabaseBatch(ctx *gin.Context) {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": "at least one database is required"})
 			return
 		}
-		dbType := request.Databases[0].Type
+		dbType := string(request.Databases[0].Type)
 
 		server, err := c.serverService.GetOrCreateServerByHostPort(
 			request.WorkspaceID,

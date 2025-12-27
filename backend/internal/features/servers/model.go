@@ -4,7 +4,6 @@ import (
 	"errors"
 	"time"
 
-	"postgresus-backend/internal/features/databases"
 	"postgresus-backend/internal/util/encryption"
 
 	"github.com/google/uuid"
@@ -12,10 +11,10 @@ import (
 
 // Server represents a database server that can contain multiple databases
 type Server struct {
-	ID          uuid.UUID              `json:"id"          gorm:"column:id;primaryKey;type:uuid;default:gen_random_uuid()"`
-	WorkspaceID *uuid.UUID             `json:"workspaceId" gorm:"column:workspace_id;type:uuid"`
-	Name        string                 `json:"name"        gorm:"column:name;type:text;not null"`
-	Type        databases.DatabaseType `json:"type"        gorm:"column:type;type:text;not null"`
+	ID          uuid.UUID  `json:"id"          gorm:"column:id;primaryKey;type:uuid;default:gen_random_uuid()"`
+	WorkspaceID *uuid.UUID `json:"workspaceId" gorm:"column:workspace_id;type:uuid"`
+	Name        string     `json:"name"        gorm:"column:name;type:text;not null"`
+	Type        string     `json:"type"        gorm:"column:type;type:text;not null"` // postgresql, mysql, mariadb, mongodb
 
 	Host     string `json:"host"     gorm:"column:host;type:text;not null"`
 	Port     int    `json:"port"     gorm:"column:port;type:integer;not null"`
