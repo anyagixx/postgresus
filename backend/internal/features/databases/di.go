@@ -3,6 +3,7 @@ package databases
 import (
 	audit_logs "postgresus-backend/internal/features/audit_logs"
 	"postgresus-backend/internal/features/notifiers"
+	"postgresus-backend/internal/features/servers"
 	users_services "postgresus-backend/internal/features/users/services"
 	workspaces_services "postgresus-backend/internal/features/workspaces/services"
 	"postgresus-backend/internal/util/encryption"
@@ -27,6 +28,7 @@ var databaseController = &DatabaseController{
 	databaseService,
 	users_services.GetUserService(),
 	workspaces_services.GetWorkspaceService(),
+	servers.GetServerService(),
 }
 
 func GetDatabaseService() *DatabaseService {

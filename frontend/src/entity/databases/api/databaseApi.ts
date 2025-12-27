@@ -115,9 +115,25 @@ export const databaseApi = {
     );
   },
 
-  async createDatabaseBatch(workspaceId: string, databases: Database[]) {
+  async createDatabaseBatch(
+    workspaceId: string,
+    databases: Database[],
+    serverConnection?: ServerConnection,
+    serverName?: string,
+  ) {
     const requestOptions: RequestOptions = new RequestOptions();
-    requestOptions.setBody(JSON.stringify({ workspaceId, databases }));
+    requestOptions.setBody(
+      JSON.stringify({
+        workspaceId,
+        databases,
+        serverName: serverName || '',
+        host: serverConnection?.host || '',
+        port: serverConnection?.port || 0,
+        username: serverConnection?.username || '',
+        password: serverConnection?.password || '',
+        isHttps: serverConnection?.isHttps || false,
+      }),
+    );
     return apiHelper.fetchPostJson<Database[]>(
       `${getApplicationServer()}/api/v1/databases/create-batch`,
       requestOptions,

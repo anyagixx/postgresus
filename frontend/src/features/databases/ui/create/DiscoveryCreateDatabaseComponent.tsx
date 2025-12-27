@@ -33,6 +33,7 @@ export const DiscoveryCreateDatabaseComponent = ({ workspaceId, onCreated, onClo
 
     // Server connection state
     const [serverConnection, setServerConnection] = useState<ServerConnection | null>(null);
+    const [serverName, setServerName] = useState(''); // User-friendly server name
     const [discoveredDatabases, setDiscoveredDatabases] = useState<DiscoveredDatabase[]>([]);
     const [selectedDatabases, setSelectedDatabases] = useState<DiscoveredDatabase[]>([]);
 
@@ -57,8 +58,10 @@ export const DiscoveryCreateDatabaseComponent = ({ workspaceId, onCreated, onClo
     const handleServerConnected = (
         connection: ServerConnection,
         databases: DiscoveredDatabase[],
+        name: string,
     ) => {
         setServerConnection(connection);
+        setServerName(name);
         setDiscoveredDatabases(databases);
         setStep('select-databases');
     };
@@ -98,8 +101,13 @@ export const DiscoveryCreateDatabaseComponent = ({ workspaceId, onCreated, onClo
                 } as PostgresqlDatabase,
             }));
 
-            // Batch create all databases
-            const createdDatabases = await databaseApi.createDatabaseBatch(workspaceId, databasesToCreate);
+            // Batch create all databases with server info
+            const createdDatabases = await databaseApi.createDatabaseBatch(
+                workspaceId,
+                databasesToCreate,
+                serverConnection,
+                serverName,
+            );
 
             // Create backup configs for each database (without running backups yet)
             for (const createdDb of createdDatabases) {

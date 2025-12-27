@@ -10,13 +10,14 @@ import {
 import { ConnectionStringParser } from '../../../../entity/databases/model/postgresql/ConnectionStringParser';
 
 interface Props {
-    onConnected: (serverConnection: ServerConnection, databases: DiscoveredDatabase[]) => void;
+    onConnected: (serverConnection: ServerConnection, databases: DiscoveredDatabase[], serverName: string) => void;
     onCancel: () => void;
 }
 
 export const ServerConnectionComponent = ({ onConnected, onCancel }: Props) => {
     const { message } = App.useApp();
 
+    const [serverName, setServerName] = useState(''); // User-friendly name like "Production Server"
     const [serverConnection, setServerConnection] = useState<ServerConnection>({
         host: '',
         port: 5432,
@@ -65,7 +66,7 @@ export const ServerConnectionComponent = ({ onConnected, onCancel }: Props) => {
 
         try {
             const response = await databaseApi.discoverDatabases(serverConnection);
-            onConnected(serverConnection, response.databases);
+            onConnected(serverConnection, response.databases, serverName);
         } catch (e) {
             setConnectionError((e as Error).message);
         }
@@ -74,6 +75,7 @@ export const ServerConnectionComponent = ({ onConnected, onCancel }: Props) => {
     };
 
     const isAllFieldsFilled =
+        serverName &&
         serverConnection.host &&
         serverConnection.port &&
         serverConnection.username &&
@@ -95,6 +97,20 @@ export const ServerConnectionComponent = ({ onConnected, onCancel }: Props) => {
                     <CopyOutlined className="mr-1" />
                     Parse from clipboard
                 </div>
+            </div>
+
+            <div className="mb-1 flex w-full items-center">
+                <div className="min-w-[150px]">Server Name</div>
+                <Input
+                    value={serverName}
+                    onChange={(e) => {
+                        setServerName(e.target.value);
+                        setConnectionError(null);
+                    }}
+                    size="small"
+                    className="max-w-[250px] grow"
+                    placeholder="e.g. Production Server"
+                />
             </div>
 
             <div className="mb-1 flex w-full items-center">

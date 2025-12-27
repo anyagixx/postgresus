@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"postgresus-backend/internal/features/databases/databases/postgresql"
+	"postgresus-backend/internal/features/servers"
 	users_middleware "postgresus-backend/internal/features/users/middleware"
 	users_services "postgresus-backend/internal/features/users/services"
 	workspaces_services "postgresus-backend/internal/features/workspaces/services"
@@ -18,6 +19,7 @@ type DatabaseController struct {
 	databaseService  *DatabaseService
 	userService      *users_services.UserService
 	workspaceService *workspaces_services.WorkspaceService
+	serverService    *servers.ServerService
 }
 
 func (c *DatabaseController) RegisterRoutes(router *gin.RouterGroup) {
@@ -449,6 +451,14 @@ func (c *DatabaseController) DiscoverDatabases(ctx *gin.Context) {
 type CreateDatabaseBatchRequest struct {
 	WorkspaceID uuid.UUID  `json:"workspaceId"`
 	Databases   []Database `json:"databases"`
+
+	// Server information for grouping databases
+	ServerName string `json:"serverName"` // User-friendly name like "Production Server"
+	Host       string `json:"host"`       // Server host
+	Port       int    `json:"port"`       // Server port
+	Username   string `json:"username"`   // Connection username
+	Password   string `json:"password"`   // Connection password
+	IsHttps    bool   `json:"isHttps"`    // SSL/TLS required
 }
 
 // CreateDatabaseBatch
@@ -481,8 +491,38 @@ func (c *DatabaseController) CreateDatabaseBatch(ctx *gin.Context) {
 		return
 	}
 
+	// Create or get server if server info is provided
+	var serverID *uuid.UUID
+	if request.ServerName != "" && request.Host != "" && request.Port > 0 {
+		// Determine database type from first database
+		if len(request.Databases) == 0 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "at least one database is required"})
+			return
+		}
+		dbType := request.Databases[0].Type
+
+		server, err := c.serverService.GetOrCreateServerByHostPort(
+			request.WorkspaceID,
+			request.ServerName,
+			dbType,
+			request.Host,
+			request.Port,
+			request.Username,
+			request.Password,
+			request.IsHttps,
+		)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "failed to create server: " + err.Error()})
+			return
+		}
+		serverID = &server.ID
+	}
+
 	var createdDatabases []*Database
 	for i := range request.Databases {
+		// Assign server ID to each database
+		request.Databases[i].ServerID = serverID
+
 		database, err := c.databaseService.CreateDatabase(user, request.WorkspaceID, &request.Databases[i])
 		if err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{
