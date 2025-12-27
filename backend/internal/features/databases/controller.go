@@ -19,7 +19,7 @@ type DatabaseController struct {
 	databaseService  *DatabaseService
 	userService      *users_services.UserService
 	workspaceService *workspaces_services.WorkspaceService
-	serverService    *servers.ServerService
+	serverService    *servers.ServerService // Can be nil, will be accessed lazily
 }
 
 func (c *DatabaseController) RegisterRoutes(router *gin.RouterGroup) {
@@ -502,7 +502,9 @@ func (c *DatabaseController) CreateDatabaseBatch(ctx *gin.Context) {
 		}
 		dbType := string(request.Databases[0].Type)
 
-		server, err := c.serverService.GetOrCreateServerByHostPort(
+		// Get server service lazily to avoid circular dependency
+		serverService := servers.GetServerService()
+		server, err := serverService.GetOrCreateServerByHostPort(
 			request.WorkspaceID,
 			request.ServerName,
 			dbType,
