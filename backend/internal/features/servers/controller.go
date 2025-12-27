@@ -249,7 +249,7 @@ func (c *ServerController) DeleteServer(ctx *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Router /api/v1/workspaces/{workspaceId}/servers/{serverId}/linked-databases [get]
 func (c *ServerController) GetLinkedDatabases(ctx *gin.Context) {
-	user := ctx.MustGet("user").(*users_models.User)
+	_ = ctx.MustGet("user").(*users_models.User) // user not used but required by middleware
 	serverID, err := uuid.Parse(ctx.Param("serverId"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid server ID"})
