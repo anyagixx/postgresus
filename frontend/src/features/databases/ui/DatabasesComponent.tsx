@@ -1,5 +1,5 @@
 import { CaretDownOutlined, CaretRightOutlined, EditOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
-import { Button, Input, Modal, Spin, Tooltip, message, notification } from 'antd';
+import { App, Button, Input, Modal, Spin, Tooltip, message } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 
 import { databaseApi } from '../../../entity/databases';
@@ -22,6 +22,7 @@ const SELECTED_DATABASE_STORAGE_KEY = 'selectedDatabaseId';
 const COLLAPSED_GROUPS_STORAGE_KEY = 'collapsedServerGroups';
 
 export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }: Props) => {
+  const { notification } = App.useApp();
   const isMobile = useIsMobile();
   const [isLoading, setIsLoading] = useState(true);
   const [databases, setDatabases] = useState<Database[]>([]);
@@ -304,6 +305,10 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                                   const dbsToCheck = grouped[serverName];
                                   const totalCount = dbsToCheck.length;
                                   
+                                  if (totalCount === 0) {
+                                    return;
+                                  }
+                                  
                                   notification.info({
                                     message: 'Checking connections...',
                                     description: `Testing ${totalCount} databases`,
@@ -344,36 +349,20 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                                     } else if (okResults.length === 0) {
                                       const errorDetails = failResults
                                         .map(r => `${r.name}: ${r.error || 'Connection failed'}`)
-                                        .join('\n');
+                                        .join('; ');
                                       notification.error({
                                         message: 'Connection Failed ❌',
-                                        description: (
-                                          <div>
-                                            <div>All {failResults.length} databases failed to connect:</div>
-                                            <div className="mt-2 text-xs font-mono whitespace-pre-wrap max-h-40 overflow-y-auto">
-                                              {errorDetails}
-                                            </div>
-                                          </div>
-                                        ),
+                                        description: `All ${failResults.length} databases failed to connect. ${errorDetails}`,
                                         key: 'check-connections',
                                         duration: 15
                                       });
                                     } else {
                                       const failedDetails = failResults
                                         .map(r => `${r.name}: ${r.error || 'Connection failed'}`)
-                                        .join('\n');
+                                        .join('; ');
                                       notification.warning({
                                         message: `Partial Success ⚠️`,
-                                        description: (
-                                          <div>
-                                            <div>
-                                              {okResults.length} connected, {failResults.length} failed:
-                                            </div>
-                                            <div className="mt-2 text-xs font-mono whitespace-pre-wrap max-h-40 overflow-y-auto">
-                                              {failedDetails}
-                                            </div>
-                                          </div>
-                                        ),
+                                        description: `${okResults.length} connected, ${failResults.length} failed. Failed: ${failedDetails}`,
                                         key: 'check-connections',
                                         duration: 15
                                       });
