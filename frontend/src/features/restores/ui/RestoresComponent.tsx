@@ -74,7 +74,7 @@ export const RestoresComponent = ({ database, backup, workspaceId }: Props) => {
   const [isShowRestore, setIsShowRestore] = useState(false);
 
   // New state for restore mode and database selection
-  const [restoreMode, setRestoreMode] = useState<RestoreMode>('manual');
+  const [restoreMode, setRestoreMode] = useState<RestoreMode>('select');
   const [workspaceDatabases, setWorkspaceDatabases] = useState<Database[]>([]);
   const [selectedDatabaseId, setSelectedDatabaseId] = useState<string | undefined>();
   const [isLoadingDatabases, setIsLoadingDatabases] = useState(false);
@@ -333,7 +333,10 @@ export const RestoresComponent = ({ database, backup, workspaceId }: Props) => {
             type="primary"
             disabled={isRestoreInProgress}
             loading={isRestoreInProgress}
-            onClick={() => setIsShowRestore(true)}
+            onClick={() => {
+              setIsShowRestore(true);
+              loadWorkspaceDatabases();
+            }}
           >
             Restore from backup
           </Button>
