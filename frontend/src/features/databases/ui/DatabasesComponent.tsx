@@ -1,10 +1,10 @@
-import { CaretDownOutlined, CaretRightOutlined, EditOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
-import { App, Button, Input, Modal, Spin, Tooltip, message } from 'antd';
+import { CaretDownOutlined, CaretRightOutlined, DeleteOutlined, EditOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
+import { App, Button, Input, Modal, Radio, Spin, Tooltip, message, notification } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 
 import { databaseApi } from '../../../entity/databases';
 import type { Database } from '../../../entity/databases';
-import { serverApi } from '../../../entity/servers';
+import { serverApi, type DeleteServerOption } from '../../../entity/servers';
 import type { WorkspaceResponse } from '../../../entity/workspaces';
 import { useIsMobile } from '../../../shared/hooks';
 import { CreateDatabaseComponent } from './CreateDatabaseComponent';
@@ -50,6 +50,25 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
     loading: false,
   });
 
+  // Delete server modal state
+  const [deleteModal, setDeleteModal] = useState<{
+    open: boolean;
+    serverId: string | null;
+    serverName: string;
+    linkedDatabases: Database[];
+    loading: boolean;
+    loadingDatabases: boolean;
+    selectedOption: DeleteServerOption;
+  }>({
+    open: false,
+    serverId: null,
+    serverName: '',
+    linkedDatabases: [],
+    loading: false,
+    loadingDatabases: false,
+    selectedOption: 'unlink',
+  });
+
   const handleRenameServer = async () => {
     if (!renameModal.serverId || !renameModal.newName.trim()) return;
 
@@ -62,6 +81,87 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
     } catch (error) {
       message.error('Failed to rename server');
       setRenameModal(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  const handleOpenDeleteModal = async (serverId: string, serverName: string) => {
+    setDeleteModal({
+      open: true,
+      serverId,
+      serverName,
+      linkedDatabases: [],
+      loading: false,
+      loadingDatabases: true,
+      selectedOption: 'unlink',
+    });
+
+    try {
+      const linkedDatabases = await serverApi.getLinkedDatabases(serverId);
+      setDeleteModal(prev => ({
+        ...prev,
+        linkedDatabases,
+        loadingDatabases: false,
+      }));
+    } catch (error) {
+      notification.error({
+        message: 'Error loading linked databases',
+        description: (error as Error).message || 'Failed to load databases linked to this server',
+      });
+      setDeleteModal(prev => ({
+        ...prev,
+        loadingDatabases: false,
+      }));
+    }
+  };
+
+  const handleDeleteServer = async () => {
+    if (!deleteModal.serverId || !deleteModal.selectedOption) return;
+
+    if (deleteModal.selectedOption === 'cancel') {
+      setDeleteModal({
+        open: false,
+        serverId: null,
+        serverName: '',
+        linkedDatabases: [],
+        loading: false,
+        loadingDatabases: false,
+        selectedOption: 'unlink',
+      });
+      return;
+    }
+
+    setDeleteModal(prev => ({ ...prev, loading: true }));
+    try {
+      await serverApi.deleteServer(deleteModal.serverId, deleteModal.selectedOption);
+      
+      if (deleteModal.selectedOption === 'unlink') {
+        notification.success({
+          message: 'Server deleted',
+          description: `${deleteModal.linkedDatabases.length} databases have been unlinked from the server`,
+        });
+      } else if (deleteModal.selectedOption === 'cascade') {
+        notification.success({
+          message: 'Server and databases deleted',
+          description: `Server and ${deleteModal.linkedDatabases.length} databases have been deleted`,
+        });
+      }
+
+      setDeleteModal({
+        open: false,
+        serverId: null,
+        serverName: '',
+        linkedDatabases: [],
+        loading: false,
+        loadingDatabases: false,
+        selectedOption: 'unlink',
+      });
+      loadDatabases(true);
+    } catch (error) {
+      notification.error({
+        message: 'Failed to delete server',
+        description: (error as Error).message || 'Unknown error occurred',
+      });
+      setDeleteModal(prev => ({ ...prev, loading: false }));
     }
   };
 
@@ -416,6 +516,22 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                                 <EditOutlined className="text-[10px]" />
                               </button>
                             </Tooltip>
+                            <Tooltip title="Delete server">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const firstDb = grouped[serverName][0];
+                                  if (firstDb?.serverId) {
+                                    handleOpenDeleteModal(firstDb.serverId, displayName);
+                                  } else {
+                                    message.warning('Cannot delete: server ID not found');
+                                  }
+                                }}
+                                className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-red-500 dark:hover:bg-gray-700"
+                              >
+                                <DeleteOutlined className="text-[10px]" />
+                              </button>
+                            </Tooltip>
                           </div>
                         )}
 
@@ -571,6 +687,120 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
               }
             }}
           />
+        </div>
+      </Modal>
+
+      {/* Delete Server Modal */}
+      <Modal
+        title={`Delete Server: ${deleteModal.serverName}`}
+        open={deleteModal.open}
+        onCancel={() => setDeleteModal({
+          open: false,
+          serverId: null,
+          serverName: '',
+          linkedDatabases: [],
+          loading: false,
+          loadingDatabases: false,
+          selectedOption: 'unlink',
+        })}
+        footer={[
+          <Button
+            key="cancel"
+            onClick={() => setDeleteModal({
+              open: false,
+              serverId: null,
+              serverName: '',
+              linkedDatabases: [],
+              loading: false,
+              loadingDatabases: false,
+              selectedOption: 'unlink',
+            })}
+          >
+            Cancel
+          </Button>,
+          <Button
+            key="delete"
+            type="primary"
+            danger
+            loading={deleteModal.loading}
+            disabled={deleteModal.loadingDatabases || deleteModal.selectedOption === 'cancel'}
+            onClick={handleDeleteServer}
+          >
+            {deleteModal.selectedOption === 'cancel' ? 'Cancel' : 'Delete Server'}
+          </Button>,
+        ]}
+        width={600}
+      >
+        <div className="py-4">
+          {deleteModal.loadingDatabases ? (
+            <div className="flex justify-center py-8">
+              <Spin size="large" />
+            </div>
+          ) : deleteModal.linkedDatabases.length > 0 ? (
+            <>
+              <div className="mb-4 rounded bg-yellow-50 p-3 dark:bg-yellow-900/20">
+                <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">
+                  ⚠️ Warning: This server has {deleteModal.linkedDatabases.length} linked database{deleteModal.linkedDatabases.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+
+              <div className="mb-4">
+                <label className="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  Choose deletion option:
+                </label>
+                <Radio.Group
+                  value={deleteModal.selectedOption}
+                  onChange={(e) => setDeleteModal(prev => ({ ...prev, selectedOption: e.target.value }))}
+                  className="flex flex-col gap-3"
+                >
+                  <Radio value="unlink">
+                    <div>
+                      <div className="font-semibold">Option A: Unlink databases</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        Delete the server and unlink all {deleteModal.linkedDatabases.length} databases. Databases will remain in the "Ungrouped" section.
+                      </div>
+                    </div>
+                  </Radio>
+                  <Radio value="cascade">
+                    <div>
+                      <div className="font-semibold text-red-600 dark:text-red-400">Option B: Delete server and all databases</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        Delete the server and permanently delete all {deleteModal.linkedDatabases.length} linked databases. This action cannot be undone!
+                      </div>
+                    </div>
+                  </Radio>
+                  <Radio value="cancel">
+                    <div>
+                      <div className="font-semibold">Option C: Cancel deletion</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        Keep the server and all databases unchanged.
+                      </div>
+                    </div>
+                  </Radio>
+                </Radio.Group>
+              </div>
+
+              <div className="mt-4 max-h-60 overflow-y-auto rounded border border-gray-200 dark:border-gray-700">
+                <div className="bg-gray-50 px-3 py-2 text-xs font-semibold uppercase text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                  Linked Databases ({deleteModal.linkedDatabases.length}):
+                </div>
+                <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {deleteModal.linkedDatabases.map((db) => (
+                    <div key={db.id} className="px-3 py-2 text-sm">
+                      <div className="font-medium">{db.name}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{db.type}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="py-4">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                This server has no linked databases. The server will be deleted permanently.
+              </p>
+            </div>
+          )}
         </div>
       </Modal>
     </>

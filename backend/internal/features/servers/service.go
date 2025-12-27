@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"postgresus-backend/internal/features/databases"
 	"postgresus-backend/internal/features/databases/databases/postgresql"
 	users_models "postgresus-backend/internal/features/users/models"
 	"postgresus-backend/internal/util/encryption"
@@ -16,9 +17,10 @@ import (
 )
 
 type ServerService struct {
-	serverRepository *ServerRepository
-	logger           *slog.Logger
-	fieldEncryptor   encryption.FieldEncryptor
+	serverRepository   *ServerRepository
+	databaseRepository *databases.DatabaseRepository
+	logger             *slog.Logger
+	fieldEncryptor     encryption.FieldEncryptor
 }
 
 func (s *ServerService) CreateServer(
@@ -78,13 +80,67 @@ func (s *ServerService) UpdateServer(
 	return server, nil
 }
 
+// DeleteServerOption represents the deletion strategy
+type DeleteServerOption string
+
+const (
+	DeleteServerOptionUnlink DeleteServerOption = "unlink" // Option A: Unlink databases from server
+	DeleteServerOptionCascade DeleteServerOption = "cascade" // Option B: Delete server and all databases
+	DeleteServerOptionCancel  DeleteServerOption = "cancel"  // Option C: Cancel deletion
+)
+
+func (s *ServerService) GetDatabasesByServerID(serverID uuid.UUID) ([]*databases.Database, error) {
+	return s.databaseRepository.FindByServerID(serverID)
+}
+
 func (s *ServerService) DeleteServer(
 	user *users_models.User,
 	serverID uuid.UUID,
+	option DeleteServerOption,
 ) error {
-	// TODO: Check if there are databases linked to this server
-	// and prevent deletion or cascade
+	// Check if server exists
+	server, err := s.serverRepository.FindByID(serverID)
+	if err != nil {
+		return fmt.Errorf("server not found: %w", err)
+	}
+	if server == nil {
+		return errors.New("server not found")
+	}
 
+	// Check if there are databases linked to this server
+	linkedDatabases, err := s.databaseRepository.FindByServerID(serverID)
+	if err != nil {
+		return fmt.Errorf("failed to check linked databases: %w", err)
+	}
+
+	if len(linkedDatabases) > 0 {
+		switch option {
+		case DeleteServerOptionUnlink:
+			// Option A: Unlink all databases from server (set server_id = NULL)
+			if err := s.databaseRepository.UnlinkFromServer(serverID); err != nil {
+				return fmt.Errorf("failed to unlink databases from server: %w", err)
+			}
+			s.logger.Info("Unlinked databases from server", "server_id", serverID, "count", len(linkedDatabases))
+
+		case DeleteServerOptionCascade:
+			// Option B: Delete all linked databases, then delete server
+			for _, db := range linkedDatabases {
+				if err := s.databaseRepository.Delete(db.ID); err != nil {
+					return fmt.Errorf("failed to delete database %s: %w", db.ID, err)
+				}
+			}
+			s.logger.Info("Deleted databases with server", "server_id", serverID, "count", len(linkedDatabases))
+
+		case DeleteServerOptionCancel:
+			// Option C: Cancel deletion
+			return errors.New("deletion cancelled by user")
+
+		default:
+			return fmt.Errorf("invalid delete option: %s", option)
+		}
+	}
+
+	// Delete the server
 	return s.serverRepository.DeleteByID(serverID)
 }
 

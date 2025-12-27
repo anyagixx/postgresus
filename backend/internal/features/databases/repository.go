@@ -253,3 +253,32 @@ func (r *DatabaseRepository) GetAllDatabases() ([]*Database, error) {
 
 	return databases, nil
 }
+
+func (r *DatabaseRepository) FindByServerID(serverID uuid.UUID) ([]*Database, error) {
+	var databases []*Database
+
+	if err := storage.
+		GetDb().
+		Table("databases").
+		Select("databases.*, servers.name as server_name").
+		Joins("LEFT JOIN servers ON databases.server_id = servers.id").
+		Preload("Postgresql").
+		Preload("Mysql").
+		Preload("Mariadb").
+		Preload("Mongodb").
+		Preload("Notifiers").
+		Where("databases.server_id = ?", serverID).
+		Order("databases.name ASC").
+		Find(&databases).Error; err != nil {
+		return nil, err
+	}
+
+	return databases, nil
+}
+
+func (r *DatabaseRepository) UnlinkFromServer(serverID uuid.UUID) error {
+	return storage.GetDb().
+		Model(&Database{}).
+		Where("server_id = ?", serverID).
+		Update("server_id", nil).Error
+}

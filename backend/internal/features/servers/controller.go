@@ -53,6 +53,7 @@ func (c *ServerController) RegisterRoutes(router *gin.RouterGroup) {
 		servers.GET("/:serverId", c.GetServer)
 		servers.PUT("/:serverId", c.UpdateServer)
 		servers.DELETE("/:serverId", c.DeleteServer)
+		servers.GET("/:serverId/linked-databases", c.GetLinkedDatabases)
 		servers.POST("/test-connection", c.TestConnection)
 	}
 }
@@ -194,14 +195,22 @@ func (c *ServerController) UpdateServer(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, updatedServer)
 }
 
+// DeleteServerRequest represents the request body for deleting a server
+type DeleteServerRequest struct {
+	Option DeleteServerOption `json:"option" binding:"required"` // "unlink", "cascade", or "cancel"
+}
+
 // DeleteServer godoc
 // @Summary Delete a server
-// @Description Delete a server by its ID
+// @Description Delete a server by its ID with options for handling linked databases
 // @Tags servers
 // @Accept json
 // @Produce json
 // @Param serverId path string true "Server ID"
+// @Param request body DeleteServerRequest true "Delete option: unlink (unlink databases), cascade (delete with databases), or cancel"
 // @Success 200 {object} map[string]string
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Router /api/v1/workspaces/{workspaceId}/servers/{serverId} [delete]
 func (c *ServerController) DeleteServer(ctx *gin.Context) {
 	user := ctx.MustGet("user").(*users_models.User)
@@ -211,12 +220,54 @@ func (c *ServerController) DeleteServer(ctx *gin.Context) {
 		return
 	}
 
-	if err := c.serverService.DeleteServer(user, serverID); err != nil {
+	var request DeleteServerRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Option is required: unlink, cascade, or cancel"})
+		return
+	}
+
+	if err := c.serverService.DeleteServer(user, serverID, request.Option); err != nil {
+		if err.Error() == "deletion cancelled by user" {
+			ctx.JSON(http.StatusOK, gin.H{"message": "Deletion cancelled"})
+			return
+		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{"message": "Server deleted successfully"})
+}
+
+// GetLinkedDatabases godoc
+// @Summary Get databases linked to a server
+// @Description Get all databases linked to a specific server
+// @Tags servers
+// @Accept json
+// @Produce json
+// @Param serverId path string true "Server ID"
+// @Success 200 {array} databases.Database
+// @Failure 400 {object} map[string]string
+// @Router /api/v1/workspaces/{workspaceId}/servers/{serverId}/linked-databases [get]
+func (c *ServerController) GetLinkedDatabases(ctx *gin.Context) {
+	user := ctx.MustGet("user").(*users_models.User)
+	serverID, err := uuid.Parse(ctx.Param("serverId"))
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid server ID"})
+		return
+	}
+
+	databases, err := c.serverService.GetDatabasesByServerID(serverID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Hide sensitive data from databases
+	for _, db := range databases {
+		db.HideSensitiveData()
+	}
+
+	ctx.JSON(http.StatusOK, databases)
 }
 
 // TestConnection godoc

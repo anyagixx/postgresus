@@ -22,6 +22,12 @@ export interface UpdateServerRequest {
     isHttps?: boolean;
 }
 
+export type DeleteServerOption = 'unlink' | 'cascade' | 'cancel';
+
+export interface DeleteServerRequest {
+    option: DeleteServerOption;
+}
+
 export const serverApi = {
     async getServers(workspaceId: string) {
         const requestOptions: RequestOptions = new RequestOptions();
@@ -50,11 +56,21 @@ export const serverApi = {
         );
     },
 
-    async deleteServer(serverId: string) {
+    async deleteServer(serverId: string, option: DeleteServerOption) {
         const requestOptions: RequestOptions = new RequestOptions();
+        requestOptions.setBody(JSON.stringify({ option }));
         return apiHelper.fetchDeleteRaw(
             `${getApplicationServer()}/api/v1/servers/${serverId}`,
             requestOptions,
+        );
+    },
+
+    async getLinkedDatabases(serverId: string) {
+        const requestOptions: RequestOptions = new RequestOptions();
+        return apiHelper.fetchGetJson<any[]>(
+            `${getApplicationServer()}/api/v1/servers/${serverId}/linked-databases`,
+            requestOptions,
+            true,
         );
     },
 
