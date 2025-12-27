@@ -27,7 +27,6 @@ var databaseController = &DatabaseController{
 	databaseService,
 	users_services.GetUserService(),
 	workspaces_services.GetWorkspaceService(),
-	nil, // serverService will be set lazily to avoid circular dependency
 }
 
 func GetDatabaseService() *DatabaseService {
