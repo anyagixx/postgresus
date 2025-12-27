@@ -56,6 +56,18 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
     });
   }, [workspace.id]);
 
+  // Get host:port from first database in group
+  const getServerAddress = (databases: Database[]): string | null => {
+    const firstDb = databases[0];
+    if (!firstDb) return null;
+
+    const dbConfig = firstDb.postgresql || firstDb.mysql || firstDb.mariadb || firstDb.mongodb;
+    if (dbConfig && 'host' in dbConfig && 'port' in dbConfig) {
+      return `${dbConfig.host}:${dbConfig.port}`;
+    }
+    return null;
+  };
+
   const updateSelectedDatabaseId = (databaseId: string | undefined) => {
     setSelectedDatabaseId(databaseId);
     if (databaseId) {
@@ -152,6 +164,45 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
               </>
             )}
 
+            {/* Collapse All / Expand All button */}
+            {filteredDatabases.length > 0 && Object.keys(
+              filteredDatabases.reduce((acc, db) => {
+                const key = db.serverName || '__ungrouped__';
+                acc[key] = true;
+                return acc;
+              }, {} as Record<string, boolean>)
+            ).length > 1 && (
+                <div className="mb-2 flex justify-end">
+                  <button
+                    onClick={() => {
+                      const allKeys = [...new Set(filteredDatabases.map(db => db.serverName || '__ungrouped__'))];
+                      const allCollapsed = allKeys.every(key => collapsedGroups.has(key));
+
+                      if (allCollapsed) {
+                        // Expand all
+                        setCollapsedGroups(new Set());
+                        localStorage.setItem(
+                          `${COLLAPSED_GROUPS_STORAGE_KEY}_${workspace.id}`,
+                          JSON.stringify([])
+                        );
+                      } else {
+                        // Collapse all
+                        setCollapsedGroups(new Set(allKeys));
+                        localStorage.setItem(
+                          `${COLLAPSED_GROUPS_STORAGE_KEY}_${workspace.id}`,
+                          JSON.stringify(allKeys)
+                        );
+                      }
+                    }}
+                    className="text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  >
+                    {[...new Set(filteredDatabases.map(db => db.serverName || '__ungrouped__'))].every(key => collapsedGroups.has(key))
+                      ? '▼ Expand All'
+                      : '▲ Collapse All'}
+                  </button>
+                </div>
+              )}
+
             {filteredDatabases.length > 0
               ? (() => {
                 // Group databases by serverName
@@ -176,6 +227,7 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                   const isCollapsed = collapsedGroups.has(serverName);
                   const displayName = serverName === '__ungrouped__' ? 'Ungrouped' : serverName;
                   const dbCount = grouped[serverName].length;
+                  const serverAddress = serverName !== '__ungrouped__' ? getServerAddress(grouped[serverName]) : null;
 
                   return (
                     <div key={serverName} className="mb-3">
@@ -189,8 +241,17 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                         ) : (
                           <CaretDownOutlined className="text-[10px]" />
                         )}
-                        <span className="text-base">📦</span>
-                        {displayName}
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-1">
+                            <span className="text-base">📦</span>
+                            {displayName}
+                          </div>
+                          {serverAddress && (
+                            <span className="ml-5 text-[9px] font-normal normal-case text-gray-400">
+                              {serverAddress}
+                            </span>
+                          )}
+                        </div>
                         <span className="ml-auto text-[10px] font-normal">
                           {dbCount}
                         </span>
