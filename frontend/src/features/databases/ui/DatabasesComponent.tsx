@@ -117,19 +117,6 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
   const handleDeleteServer = async () => {
     if (!deleteModal.serverId || !deleteModal.selectedOption) return;
 
-    if (deleteModal.selectedOption === 'cancel') {
-      setDeleteModal({
-        open: false,
-        serverId: null,
-        serverName: '',
-        linkedDatabases: [],
-        loading: false,
-        loadingDatabases: false,
-        selectedOption: 'unlink',
-      });
-      return;
-    }
-
     setDeleteModal(prev => ({ ...prev, loading: true }));
     try {
       await serverApi.deleteServer(deleteModal.serverId, deleteModal.selectedOption);
