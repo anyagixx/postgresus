@@ -3,7 +3,6 @@ package servers
 import (
 	"net/http"
 
-	"postgresus-backend/internal/features/databases"
 	users_models "postgresus-backend/internal/features/users/models"
 
 	"github.com/gin-gonic/gin"
@@ -16,13 +15,13 @@ type ServerController struct {
 
 // CreateServerRequest represents the request body for creating a server
 type CreateServerRequest struct {
-	Name     string                 `json:"name"     binding:"required"`
-	Type     databases.DatabaseType `json:"type"     binding:"required"`
-	Host     string                 `json:"host"     binding:"required"`
-	Port     int                    `json:"port"     binding:"required"`
-	Username string                 `json:"username" binding:"required"`
-	Password string                 `json:"password" binding:"required"`
-	IsHttps  bool                   `json:"isHttps"`
+	Name     string `json:"name"     binding:"required"`
+	Type     string `json:"type"     binding:"required"` // postgresql, mysql, mariadb, mongodb
+	Host     string `json:"host"     binding:"required"`
+	Port     int    `json:"port"     binding:"required"`
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+	IsHttps  bool   `json:"isHttps"`
 }
 
 // UpdateServerRequest represents the request body for updating a server
@@ -37,12 +36,12 @@ type UpdateServerRequest struct {
 
 // TestConnectionRequest represents the request body for testing server connection
 type TestConnectionRequest struct {
-	Type     databases.DatabaseType `json:"type"     binding:"required"`
-	Host     string                 `json:"host"     binding:"required"`
-	Port     int                    `json:"port"     binding:"required"`
-	Username string                 `json:"username" binding:"required"`
-	Password string                 `json:"password" binding:"required"`
-	IsHttps  bool                   `json:"isHttps"`
+	Type     string `json:"type"     binding:"required"` // postgresql, mysql, mariadb, mongodb
+	Host     string `json:"host"     binding:"required"`
+	Port     int    `json:"port"     binding:"required"`
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+	IsHttps  bool   `json:"isHttps"`
 }
 
 // RegisterRoutes registers all server-related routes
