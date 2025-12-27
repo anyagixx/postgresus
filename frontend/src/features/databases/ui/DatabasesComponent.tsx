@@ -1,5 +1,5 @@
 import { CaretDownOutlined, CaretRightOutlined, EditOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
-import { Button, Input, Modal, Spin, Tooltip, message } from 'antd';
+import { Button, Input, Modal, Spin, Tooltip, message, notification } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 
 import { databaseApi } from '../../../entity/databases';
@@ -302,7 +302,12 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   const dbsToCheck = grouped[serverName];
-                                  message.loading({ content: `Checking ${dbsToCheck.length} databases...`, key: 'check-connections', duration: 0 });
+                                  notification.info({
+                                    message: 'Checking connections...',
+                                    description: `Testing ${dbsToCheck.length} databases`,
+                                    key: 'check-connections',
+                                    duration: 0
+                                  });
                                   // Check all databases connections
                                   Promise.all(
                                     dbsToCheck.map(db =>
@@ -315,23 +320,26 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                                     const failResults = results.filter(r => !r.ok);
 
                                     if (failResults.length === 0) {
-                                      message.success({
-                                        content: `✅ All ${okResults.length} databases connected successfully!`,
+                                      notification.success({
+                                        message: 'All Connected! ✅',
+                                        description: `All ${okResults.length} databases connected successfully`,
                                         key: 'check-connections',
-                                        duration: 4
+                                        duration: 5
                                       });
                                     } else if (okResults.length === 0) {
-                                      message.error({
-                                        content: `❌ All ${failResults.length} databases failed to connect`,
+                                      notification.error({
+                                        message: 'Connection Failed ❌',
+                                        description: `All ${failResults.length} databases failed to connect`,
                                         key: 'check-connections',
-                                        duration: 6
+                                        duration: 8
                                       });
                                     } else {
                                       const failedNames = failResults.map(r => r.name).join(', ');
-                                      message.warning({
-                                        content: `⚠️ ${okResults.length} connected, ${failResults.length} failed: ${failedNames}`,
+                                      notification.warning({
+                                        message: `Partial Success ⚠️`,
+                                        description: `${okResults.length} connected, ${failResults.length} failed: ${failedNames}`,
                                         key: 'check-connections',
-                                        duration: 8
+                                        duration: 10
                                       });
                                     }
                                     loadDatabases(true);
@@ -348,7 +356,7 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                                   e.stopPropagation();
                                   setIsShowDiscovery(true);
                                 }}
-                                className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-green-500 dark:hover:bg-gray-700"
+                                className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-blue-500 dark:hover:bg-gray-700"
                               >
                                 <PlusOutlined className="text-[10px]" />
                               </button>
