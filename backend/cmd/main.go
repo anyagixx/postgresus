@@ -23,6 +23,7 @@ import (
 	healthcheck_config "postgresus-backend/internal/features/healthcheck/config"
 	"postgresus-backend/internal/features/notifiers"
 	"postgresus-backend/internal/features/restores"
+	"postgresus-backend/internal/features/servers"
 	"postgresus-backend/internal/features/storages"
 	system_healthcheck "postgresus-backend/internal/features/system/healthcheck"
 	users_controllers "postgresus-backend/internal/features/users/controllers"
@@ -259,6 +260,7 @@ func setUpRoutes(r *gin.Engine) {
 	disk.GetDiskController().RegisterRoutes(protected)
 	notifiers.GetNotifierController().RegisterRoutes(protected)
 	storages.GetStorageController().RegisterRoutes(protected)
+	servers.GetServerController().RegisterRoutes(protected)
 	databases.GetDatabaseController().RegisterRoutes(protected)
 	backups.GetBackupController().RegisterRoutes(protected)
 	restores.GetRestoreController().RegisterRoutes(protected)
