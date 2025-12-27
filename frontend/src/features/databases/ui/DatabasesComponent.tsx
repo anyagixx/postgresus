@@ -1,5 +1,5 @@
 import { CaretDownOutlined, CaretRightOutlined, DeleteOutlined, EditOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
-import { App, Button, Input, Modal, Radio, Spin, Tooltip, message, notification } from 'antd';
+import { App, Button, Input, Modal, Radio, Spin, Tooltip, message } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 
 import { databaseApi } from '../../../entity/databases';
