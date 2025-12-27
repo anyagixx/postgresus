@@ -1,9 +1,10 @@
 import { CaretDownOutlined, CaretRightOutlined, EditOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
-import { Button, Modal, Spin, Tooltip, message } from 'antd';
+import { Button, Input, Modal, Spin, Tooltip, message } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 
 import { databaseApi } from '../../../entity/databases';
 import type { Database } from '../../../entity/databases';
+import { serverApi } from '../../../entity/servers';
 import type { WorkspaceResponse } from '../../../entity/workspaces';
 import { useIsMobile } from '../../../shared/hooks';
 import { CreateDatabaseComponent } from './CreateDatabaseComponent';
@@ -32,6 +33,36 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
 
   // Hover state for server groups
   const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
+
+  // Rename server modal state
+  const [renameModal, setRenameModal] = useState<{
+    open: boolean;
+    serverId: string | null;
+    currentName: string;
+    newName: string;
+    loading: boolean;
+  }>({
+    open: false,
+    serverId: null,
+    currentName: '',
+    newName: '',
+    loading: false,
+  });
+
+  const handleRenameServer = async () => {
+    if (!renameModal.serverId || !renameModal.newName.trim()) return;
+
+    setRenameModal(prev => ({ ...prev, loading: true }));
+    try {
+      await serverApi.renameServer(workspace.id, renameModal.serverId, renameModal.newName.trim());
+      message.success('Server renamed successfully!');
+      setRenameModal({ open: false, serverId: null, currentName: '', newName: '', loading: false });
+      loadDatabases(true); // Reload to get updated server names
+    } catch (error) {
+      message.error('Failed to rename server');
+      setRenameModal(prev => ({ ...prev, loading: false }));
+    }
+  };
 
   // Collapsed server groups state (stored in localStorage)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
@@ -306,11 +337,22 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                                 <PlusOutlined className="text-[10px]" />
                               </button>
                             </Tooltip>
-                            <Tooltip title="Rename server (coming soon)">
+                            <Tooltip title="Rename server">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  message.info('Rename server feature coming soon!');
+                                  const firstDb = grouped[serverName][0];
+                                  if (firstDb?.serverId) {
+                                    setRenameModal({
+                                      open: true,
+                                      serverId: firstDb.serverId,
+                                      currentName: displayName,
+                                      newName: displayName,
+                                      loading: false,
+                                    });
+                                  } else {
+                                    message.warning('Cannot rename: server ID not found');
+                                  }
                                 }}
                                 className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-orange-500 dark:hover:bg-gray-700"
                               >
@@ -435,6 +477,45 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
           />
         </Modal>
       )}
+
+      {/* Rename Server Modal */}
+      <Modal
+        title={`Rename Server: ${renameModal.currentName}`}
+        open={renameModal.open}
+        onCancel={() => setRenameModal({ open: false, serverId: null, currentName: '', newName: '', loading: false })}
+        footer={[
+          <Button
+            key="cancel"
+            onClick={() => setRenameModal({ open: false, serverId: null, currentName: '', newName: '', loading: false })}
+          >
+            Cancel
+          </Button>,
+          <Button
+            key="save"
+            type="primary"
+            loading={renameModal.loading}
+            disabled={!renameModal.newName.trim() || renameModal.newName === renameModal.currentName}
+            onClick={handleRenameServer}
+          >
+            Save
+          </Button>,
+        ]}
+        width={400}
+      >
+        <div className="py-4">
+          <label className="mb-2 block text-sm text-gray-500">New server name:</label>
+          <Input
+            value={renameModal.newName}
+            onChange={(e) => setRenameModal(prev => ({ ...prev, newName: e.target.value }))}
+            placeholder="Enter new server name"
+            onPressEnter={() => {
+              if (renameModal.newName.trim() && renameModal.newName !== renameModal.currentName) {
+                handleRenameServer();
+              }
+            }}
+          />
+        </div>
+      </Modal>
     </>
   );
 };
