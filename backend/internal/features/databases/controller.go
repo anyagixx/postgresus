@@ -493,6 +493,7 @@ func (c *DatabaseController) CreateDatabaseBatch(ctx *gin.Context) {
 
 	// Create or get server if server info is provided
 	var serverID *uuid.UUID
+	slog.Info("CreateDatabaseBatch server info", "serverName", request.ServerName, "host", request.Host, "port", request.Port)
 	if request.ServerName != "" && request.Host != "" && request.Port > 0 {
 		// Determine database type from first database
 		if len(request.Databases) == 0 {
