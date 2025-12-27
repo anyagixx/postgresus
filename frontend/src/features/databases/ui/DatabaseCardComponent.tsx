@@ -1,4 +1,5 @@
-import { InfoCircleOutlined } from '@ant-design/icons';
+import { DeleteOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { Tooltip } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 
@@ -12,14 +13,19 @@ interface Props {
   database: Database;
   selectedDatabaseId?: string;
   setSelectedDatabaseId: (databaseId: string) => void;
+  onDelete?: (database: Database) => void;
+  isCanManageDBs?: boolean;
 }
 
 export const DatabaseCardComponent = ({
   database,
   selectedDatabaseId,
   setSelectedDatabaseId,
+  onDelete,
+  isCanManageDBs = false,
 }: Props) => {
   const [storage, setStorage] = useState<Storage | undefined>();
+  const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
     if (!database.id) return;
@@ -27,10 +33,19 @@ export const DatabaseCardComponent = ({
     backupConfigApi.getBackupConfigByDbID(database.id).then((res) => setStorage(res?.storage));
   }, [database.id]);
 
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onDelete) {
+      onDelete(database);
+    }
+  };
+
   return (
     <div
-      className={`mb-3 cursor-pointer rounded p-3 shadow ${selectedDatabaseId === database.id ? 'bg-blue-100 dark:bg-blue-800' : 'bg-white dark:bg-gray-800'}`}
+      className={`group relative mb-3 cursor-pointer rounded p-3 shadow ${selectedDatabaseId === database.id ? 'bg-blue-100 dark:bg-blue-800' : 'bg-white dark:bg-gray-800'}`}
       onClick={() => setSelectedDatabaseId(database.id)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       <div className="flex">
         <div className="mb-1 font-bold">
@@ -45,16 +60,29 @@ export const DatabaseCardComponent = ({
           )}
         </div>
 
-        {database.healthStatus && (
-          <div className="ml-auto pl-1">
-            <div
-              className={`rounded px-[6px] py-[2px] text-[10px] text-white ${database.healthStatus === HealthStatus.AVAILABLE ? 'bg-green-500' : 'bg-red-500'
-                }`}
-            >
-              {database.healthStatus === HealthStatus.AVAILABLE ? 'Available' : 'Unavailable'}
+        <div className="ml-auto flex items-center gap-1">
+          {database.healthStatus && (
+            <div className="pl-1">
+              <div
+                className={`rounded px-[6px] py-[2px] text-[10px] text-white ${database.healthStatus === HealthStatus.AVAILABLE ? 'bg-green-500' : 'bg-red-500'
+                  }`}
+              >
+                {database.healthStatus === HealthStatus.AVAILABLE ? 'Available' : 'Unavailable'}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {isCanManageDBs && onDelete && (
+            <Tooltip title="Delete database">
+              <button
+                onClick={handleDeleteClick}
+                className={`rounded p-1 text-gray-400 transition-opacity hover:bg-gray-200 hover:text-red-500 dark:hover:bg-gray-700 ${isHovered ? 'opacity-100' : 'opacity-0'}`}
+              >
+                <DeleteOutlined className="text-[12px]" />
+              </button>
+            </Tooltip>
+          )}
+        </div>
       </div>
 
       {storage && (

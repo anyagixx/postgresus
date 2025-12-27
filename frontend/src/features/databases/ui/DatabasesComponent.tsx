@@ -69,6 +69,19 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
     selectedOption: 'unlink',
   });
 
+  // Delete database modal state
+  const [deleteDatabaseModal, setDeleteDatabaseModal] = useState<{
+    open: boolean;
+    database: Database | null;
+    confirmName: string;
+    loading: boolean;
+  }>({
+    open: false,
+    database: null,
+    confirmName: '',
+    loading: false,
+  });
+
   const handleRenameServer = async () => {
     if (!renameModal.serverId || !renameModal.newName.trim()) return;
 
@@ -149,6 +162,58 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
         description: (error as Error).message || 'Unknown error occurred',
       });
       setDeleteModal(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  const handleOpenDeleteDatabaseModal = (database: Database) => {
+    setDeleteDatabaseModal({
+      open: true,
+      database,
+      confirmName: '',
+      loading: false,
+    });
+  };
+
+  const handleDeleteDatabase = async () => {
+    if (!deleteDatabaseModal.database) return;
+
+    const database = deleteDatabaseModal.database;
+    
+    // Validate confirmation name
+    if (deleteDatabaseModal.confirmName !== database.name) {
+      notification.error({
+        message: 'Confirmation failed',
+        description: 'The entered name does not match the database name',
+      });
+      return;
+    }
+
+    setDeleteDatabaseModal(prev => ({ ...prev, loading: true }));
+    try {
+      await databaseApi.deleteDatabase(database.id);
+      notification.success({
+        message: 'Database deleted',
+        description: `Database "${database.name}" has been deleted successfully`,
+      });
+      setDeleteDatabaseModal({
+        open: false,
+        database: null,
+        confirmName: '',
+        loading: false,
+      });
+      
+      // If deleted database was selected, clear selection
+      if (selectedDatabaseId === database.id) {
+        updateSelectedDatabaseId('');
+      }
+      
+      loadDatabases(true);
+    } catch (error) {
+      notification.error({
+        message: 'Failed to delete database',
+        description: (error as Error).message || 'Unknown error occurred',
+      });
+      setDeleteDatabaseModal(prev => ({ ...prev, loading: false }));
     }
   };
 
@@ -537,6 +602,8 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                             database={database}
                             selectedDatabaseId={selectedDatabaseId}
                             setSelectedDatabaseId={updateSelectedDatabaseId}
+                            onDelete={handleOpenDeleteDatabaseModal}
+                            isCanManageDBs={isCanManageDBs}
                           />
                         ))}
                       </div>
@@ -780,6 +847,89 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
               </p>
             </div>
           )}
+        </div>
+      </Modal>
+
+      {/* Delete Database Modal */}
+      <Modal
+        title="Delete Database"
+        open={deleteDatabaseModal.open}
+        onCancel={() => setDeleteDatabaseModal({
+          open: false,
+          database: null,
+          confirmName: '',
+          loading: false,
+        })}
+        footer={[
+          <Button
+            key="cancel"
+            onClick={() => setDeleteDatabaseModal({
+              open: false,
+              database: null,
+              confirmName: '',
+              loading: false,
+            })}
+          >
+            Cancel
+          </Button>,
+          <Button
+            key="delete"
+            type="primary"
+            danger
+            loading={deleteDatabaseModal.loading}
+            disabled={deleteDatabaseModal.confirmName !== (deleteDatabaseModal.database?.name || '')}
+            onClick={handleDeleteDatabase}
+          >
+            Delete Database
+          </Button>,
+        ]}
+        width={500}
+      >
+        <div className="py-4">
+          <div className="mb-4 rounded bg-red-50 p-3 dark:bg-red-900/20">
+            <p className="text-sm font-semibold text-red-800 dark:text-red-200">
+              ⚠️ Warning: This action cannot be undone!
+            </p>
+            <p className="mt-1 text-xs text-red-700 dark:text-red-300">
+              This will permanently delete the database and all its configuration. All backup configurations and related data will be removed.
+            </p>
+          </div>
+
+          <div className="mb-4 rounded border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
+            <div className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Database Information:
+            </div>
+            <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
+              <div>
+                <span className="font-medium">Name:</span> {deleteDatabaseModal.database?.name}
+              </div>
+              {deleteDatabaseModal.database?.serverName && (
+                <div>
+                  <span className="font-medium">Server:</span> {deleteDatabaseModal.database.serverName}
+                </div>
+              )}
+              <div>
+                <span className="font-medium">Type:</span> {deleteDatabaseModal.database?.type}
+              </div>
+            </div>
+          </div>
+
+          <div className="mb-2">
+            <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-300">
+              To confirm deletion, type the database name:
+            </label>
+            <Input
+              value={deleteDatabaseModal.confirmName}
+              onChange={(e) => setDeleteDatabaseModal(prev => ({ ...prev, confirmName: e.target.value }))}
+              placeholder={deleteDatabaseModal.database?.name || 'Database name'}
+              onPressEnter={() => {
+                if (deleteDatabaseModal.confirmName === deleteDatabaseModal.database?.name) {
+                  handleDeleteDatabase();
+                }
+              }}
+              autoFocus
+            />
+          </div>
         </div>
       </Modal>
     </>
