@@ -1,5 +1,6 @@
+import { CaretDownOutlined, CaretRightOutlined } from '@ant-design/icons';
 import { Button, Modal, Spin } from 'antd';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { databaseApi } from '../../../entity/databases';
 import type { Database } from '../../../entity/databases';
@@ -17,6 +18,7 @@ interface Props {
 }
 
 const SELECTED_DATABASE_STORAGE_KEY = 'selectedDatabaseId';
+const COLLAPSED_GROUPS_STORAGE_KEY = 'collapsedServerGroups';
 
 export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }: Props) => {
   const isMobile = useIsMobile();
@@ -27,6 +29,32 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
   const [isShowAddDatabase, setIsShowAddDatabase] = useState(false);
   const [isShowDiscovery, setIsShowDiscovery] = useState(false);
   const [selectedDatabaseId, setSelectedDatabaseId] = useState<string | undefined>(undefined);
+
+  // Collapsed server groups state (stored in localStorage)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem(`${COLLAPSED_GROUPS_STORAGE_KEY}_${workspace.id}`);
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const toggleGroupCollapse = useCallback((serverName: string) => {
+    setCollapsedGroups(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(serverName)) {
+        newSet.delete(serverName);
+      } else {
+        newSet.add(serverName);
+      }
+      localStorage.setItem(
+        `${COLLAPSED_GROUPS_STORAGE_KEY}_${workspace.id}`,
+        JSON.stringify([...newSet])
+      );
+      return newSet;
+    });
+  }, [workspace.id]);
 
   const updateSelectedDatabaseId = (databaseId: string | undefined) => {
     setSelectedDatabaseId(databaseId);
@@ -144,27 +172,46 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                   return a.localeCompare(b);
                 });
 
-                return sortedKeys.map((serverName) => (
-                  <div key={serverName} className="mb-3">
-                    {/* Server header */}
-                    <div className="mb-1 flex items-center gap-1 px-1 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-                      <span className="text-base">📦</span>
-                      {serverName === '__ungrouped__' ? 'Ungrouped' : serverName}
-                      <span className="ml-auto text-[10px] font-normal">
-                        {grouped[serverName].length}
-                      </span>
+                return sortedKeys.map((serverName) => {
+                  const isCollapsed = collapsedGroups.has(serverName);
+                  const displayName = serverName === '__ungrouped__' ? 'Ungrouped' : serverName;
+                  const dbCount = grouped[serverName].length;
+
+                  return (
+                    <div key={serverName} className="mb-3">
+                      {/* Server header - clickable */}
+                      <div
+                        className="mb-1 flex cursor-pointer select-none items-center gap-1 rounded px-1 py-0.5 text-xs font-semibold uppercase text-gray-500 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                        onClick={() => toggleGroupCollapse(serverName)}
+                      >
+                        {isCollapsed ? (
+                          <CaretRightOutlined className="text-[10px]" />
+                        ) : (
+                          <CaretDownOutlined className="text-[10px]" />
+                        )}
+                        <span className="text-base">📦</span>
+                        {displayName}
+                        <span className="ml-auto text-[10px] font-normal">
+                          {dbCount}
+                        </span>
+                      </div>
+                      {/* Databases in this server - collapsible with animation */}
+                      <div
+                        className={`overflow-hidden transition-all duration-200 ease-in-out ${isCollapsed ? 'max-h-0 opacity-0' : 'max-h-[2000px] opacity-100'
+                          }`}
+                      >
+                        {grouped[serverName].map((database) => (
+                          <DatabaseCardComponent
+                            key={database.id}
+                            database={database}
+                            selectedDatabaseId={selectedDatabaseId}
+                            setSelectedDatabaseId={updateSelectedDatabaseId}
+                          />
+                        ))}
+                      </div>
                     </div>
-                    {/* Databases in this server */}
-                    {grouped[serverName].map((database) => (
-                      <DatabaseCardComponent
-                        key={database.id}
-                        database={database}
-                        selectedDatabaseId={selectedDatabaseId}
-                        setSelectedDatabaseId={updateSelectedDatabaseId}
-                      />
-                    ))}
-                  </div>
-                ));
+                  );
+                });
               })()
               : searchQuery && (
                 <div className="mb-4 text-center text-sm text-gray-500 dark:text-gray-400">
