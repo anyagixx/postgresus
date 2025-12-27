@@ -6,10 +6,8 @@ import (
 )
 
 var serverRepository = &ServerRepository{}
-
 var serverService = &ServerService{
 	serverRepository,
-	
 	logger.GetLogger(),
 	encryption.GetFieldEncryptor(),
 }

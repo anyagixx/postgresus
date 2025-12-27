@@ -22,7 +22,7 @@ export interface UpdateServerRequest {
     isHttps?: boolean;
 }
 
-export type DeleteServerOption = 'unlink' | 'cascade' | 'cancel';
+export type DeleteServerOption = 'unlink' | 'cascade';
 
 export interface DeleteServerRequest {
     option: DeleteServerOption;

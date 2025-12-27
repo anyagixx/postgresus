@@ -86,7 +86,6 @@ type DeleteServerOption string
 const (
 	DeleteServerOptionUnlink DeleteServerOption = "unlink" // Option A: Unlink databases from server
 	DeleteServerOptionCascade DeleteServerOption = "cascade" // Option B: Delete server and all databases
-	DeleteServerOptionCancel  DeleteServerOption = "cancel"  // Option C: Cancel deletion
 )
 
 func (s *ServerService) GetDatabasesByServerID(serverID uuid.UUID) ([]map[string]interface{}, error) {
@@ -164,10 +163,6 @@ func (s *ServerService) DeleteServer(
 				}
 			}
 			s.logger.Info("Deleted databases with server", "server_id", serverID, "count", dbCount)
-
-		case DeleteServerOptionCancel:
-			// Option C: Cancel deletion
-			return errors.New("deletion cancelled by user")
 
 		default:
 			return fmt.Errorf("invalid delete option: %s", option)

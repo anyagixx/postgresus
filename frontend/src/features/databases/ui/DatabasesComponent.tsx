@@ -723,10 +723,10 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
             type="primary"
             danger
             loading={deleteModal.loading}
-            disabled={deleteModal.loadingDatabases || deleteModal.selectedOption === 'cancel'}
+            disabled={deleteModal.loadingDatabases}
             onClick={handleDeleteServer}
           >
-            {deleteModal.selectedOption === 'cancel' ? 'Cancel' : 'Delete Server'}
+            Delete Server
           </Button>,
         ]}
         width={600}
@@ -766,14 +766,6 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                       <div className="font-semibold text-red-600 dark:text-red-400">Option B: Delete server and all databases</div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">
                         Delete the server and permanently delete all {deleteModal.linkedDatabases.length} linked databases. This action cannot be undone!
-                      </div>
-                    </div>
-                  </Radio>
-                  <Radio value="cancel">
-                    <div>
-                      <div className="font-semibold">Option C: Cancel deletion</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        Keep the server and all databases unchanged.
                       </div>
                     </div>
                   </Radio>

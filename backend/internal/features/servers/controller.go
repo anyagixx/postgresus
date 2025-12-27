@@ -197,7 +197,7 @@ func (c *ServerController) UpdateServer(ctx *gin.Context) {
 
 // DeleteServerRequest represents the request body for deleting a server
 type DeleteServerRequest struct {
-	Option DeleteServerOption `json:"option" binding:"required"` // "unlink", "cascade", or "cancel"
+	Option DeleteServerOption `json:"option" binding:"required"` // "unlink" or "cascade"
 }
 
 // DeleteServer godoc
@@ -207,7 +207,7 @@ type DeleteServerRequest struct {
 // @Accept json
 // @Produce json
 // @Param serverId path string true "Server ID"
-// @Param request body DeleteServerRequest true "Delete option: unlink (unlink databases), cascade (delete with databases), or cancel"
+// @Param request body DeleteServerRequest true "Delete option: unlink (unlink databases) or cascade (delete with databases)"
 // @Success 200 {object} map[string]string
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
@@ -222,15 +222,11 @@ func (c *ServerController) DeleteServer(ctx *gin.Context) {
 
 	var request DeleteServerRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Option is required: unlink, cascade, or cancel"})
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Option is required: unlink or cascade"})
 		return
 	}
 
 	if err := c.serverService.DeleteServer(user, serverID, request.Option); err != nil {
-		if err.Error() == "deletion cancelled by user" {
-			ctx.JSON(http.StatusOK, gin.H{"message": "Deletion cancelled"})
-			return
-		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
