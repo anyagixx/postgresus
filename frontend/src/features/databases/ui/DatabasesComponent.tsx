@@ -125,14 +125,47 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
             )}
 
             {filteredDatabases.length > 0
-              ? filteredDatabases.map((database) => (
-                <DatabaseCardComponent
-                  key={database.id}
-                  database={database}
-                  selectedDatabaseId={selectedDatabaseId}
-                  setSelectedDatabaseId={updateSelectedDatabaseId}
-                />
-              ))
+              ? (() => {
+                // Group databases by serverName
+                const grouped = filteredDatabases.reduce(
+                  (acc, db) => {
+                    const key = db.serverName || '__ungrouped__';
+                    if (!acc[key]) acc[key] = [];
+                    acc[key].push(db);
+                    return acc;
+                  },
+                  {} as Record<string, Database[]>,
+                );
+
+                // Sort keys: server names first (alphabetically), ungrouped last
+                const sortedKeys = Object.keys(grouped).sort((a, b) => {
+                  if (a === '__ungrouped__') return 1;
+                  if (b === '__ungrouped__') return -1;
+                  return a.localeCompare(b);
+                });
+
+                return sortedKeys.map((serverName) => (
+                  <div key={serverName} className="mb-3">
+                    {/* Server header */}
+                    <div className="mb-1 flex items-center gap-1 px-1 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                      <span className="text-base">📦</span>
+                      {serverName === '__ungrouped__' ? 'Ungrouped' : serverName}
+                      <span className="ml-auto text-[10px] font-normal">
+                        {grouped[serverName].length}
+                      </span>
+                    </div>
+                    {/* Databases in this server */}
+                    {grouped[serverName].map((database) => (
+                      <DatabaseCardComponent
+                        key={database.id}
+                        database={database}
+                        selectedDatabaseId={selectedDatabaseId}
+                        setSelectedDatabaseId={updateSelectedDatabaseId}
+                      />
+                    ))}
+                  </div>
+                ));
+              })()
               : searchQuery && (
                 <div className="mb-4 text-center text-sm text-gray-500 dark:text-gray-400">
                   No databases found matching &quot;{searchQuery}&quot;
