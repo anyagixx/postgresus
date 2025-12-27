@@ -302,26 +302,42 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   const dbsToCheck = grouped[serverName];
-                                  message.loading({ content: `Checking ${dbsToCheck.length} databases...`, key: 'check-connections' });
+                                  message.loading({ content: `Checking ${dbsToCheck.length} databases...`, key: 'check-connections', duration: 0 });
                                   // Check all databases connections
                                   Promise.all(
                                     dbsToCheck.map(db =>
                                       databaseApi.testDatabaseConnection(db.id)
-                                        .then(() => ({ id: db.id, ok: true }))
-                                        .catch(() => ({ id: db.id, ok: false }))
+                                        .then(() => ({ id: db.id, name: db.name, ok: true }))
+                                        .catch(() => ({ id: db.id, name: db.name, ok: false }))
                                     )
-                                  ).then((results: { id: string; ok: boolean }[]) => {
-                                    const ok = results.filter(r => r.ok).length;
-                                    const fail = results.filter(r => !r.ok).length;
-                                    if (fail === 0) {
-                                      message.success({ content: `All ${ok} databases connected!`, key: 'check-connections' });
+                                  ).then((results: { id: string; name: string; ok: boolean }[]) => {
+                                    const okResults = results.filter(r => r.ok);
+                                    const failResults = results.filter(r => !r.ok);
+
+                                    if (failResults.length === 0) {
+                                      message.success({
+                                        content: `✅ All ${okResults.length} databases connected successfully!`,
+                                        key: 'check-connections',
+                                        duration: 4
+                                      });
+                                    } else if (okResults.length === 0) {
+                                      message.error({
+                                        content: `❌ All ${failResults.length} databases failed to connect`,
+                                        key: 'check-connections',
+                                        duration: 6
+                                      });
                                     } else {
-                                      message.warning({ content: `${ok} connected, ${fail} failed`, key: 'check-connections' });
+                                      const failedNames = failResults.map(r => r.name).join(', ');
+                                      message.warning({
+                                        content: `⚠️ ${okResults.length} connected, ${failResults.length} failed: ${failedNames}`,
+                                        key: 'check-connections',
+                                        duration: 8
+                                      });
                                     }
                                     loadDatabases(true);
                                   });
                                 }}
-                                className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-blue-500 dark:hover:bg-gray-700"
+                                className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-green-500 dark:hover:bg-gray-700"
                               >
                                 <SyncOutlined className="text-[10px]" />
                               </button>
