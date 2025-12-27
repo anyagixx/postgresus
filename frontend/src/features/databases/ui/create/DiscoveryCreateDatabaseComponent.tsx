@@ -59,10 +59,13 @@ export const DiscoveryCreateDatabaseComponent = ({ workspaceId, onCreated, onClo
         connection: ServerConnection,
         databases: DiscoveredDatabase[],
         name: string,
+        dbType: DatabaseType,
     ) => {
         setServerConnection(connection);
         setServerName(name);
         setDiscoveredDatabases(databases);
+        // Update template database type
+        setTemplateDatabase(prev => ({ ...prev, type: dbType }));
         setStep('select-databases');
     };
 

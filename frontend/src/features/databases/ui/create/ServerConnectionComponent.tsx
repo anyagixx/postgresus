@@ -1,16 +1,18 @@
 import { CopyOutlined } from '@ant-design/icons';
-import { App, Button, Input, InputNumber, Switch } from 'antd';
+import { App, Button, Input, InputNumber, Select, Switch } from 'antd';
 import { useState } from 'react';
 
 import {
     type ServerConnection,
     databaseApi,
     type DiscoveredDatabase,
+    DatabaseType,
+    getDatabaseLogoFromType,
 } from '../../../../entity/databases';
 import { ConnectionStringParser } from '../../../../entity/databases/model/postgresql/ConnectionStringParser';
 
 interface Props {
-    onConnected: (serverConnection: ServerConnection, databases: DiscoveredDatabase[], serverName: string) => void;
+    onConnected: (serverConnection: ServerConnection, databases: DiscoveredDatabase[], serverName: string, dbType: DatabaseType) => void;
     onCancel: () => void;
 }
 
@@ -18,6 +20,7 @@ export const ServerConnectionComponent = ({ onConnected, onCancel }: Props) => {
     const { message } = App.useApp();
 
     const [serverName, setServerName] = useState(''); // User-friendly name like "Production Server"
+    const [databaseType, setDatabaseType] = useState<DatabaseType>(DatabaseType.POSTGRES);
     const [serverConnection, setServerConnection] = useState<ServerConnection>({
         host: '',
         port: 5432,
@@ -28,6 +31,13 @@ export const ServerConnectionComponent = ({ onConnected, onCancel }: Props) => {
 
     const [isConnecting, setIsConnecting] = useState(false);
     const [connectionError, setConnectionError] = useState<string | null>(null);
+
+    const databaseTypeOptions = [
+        { value: DatabaseType.POSTGRES, label: 'PostgreSQL' },
+        { value: DatabaseType.MYSQL, label: 'MySQL' },
+        { value: DatabaseType.MARIADB, label: 'MariaDB' },
+        { value: DatabaseType.MONGODB, label: 'MongoDB' },
+    ];
 
     const parseFromClipboard = async () => {
         try {
@@ -66,7 +76,7 @@ export const ServerConnectionComponent = ({ onConnected, onCancel }: Props) => {
 
         try {
             const response = await databaseApi.discoverDatabases(serverConnection);
-            onConnected(serverConnection, response.databases, serverName);
+            onConnected(serverConnection, response.databases, serverName, databaseType);
         } catch (e) {
             setConnectionError((e as Error).message);
         }
@@ -83,7 +93,7 @@ export const ServerConnectionComponent = ({ onConnected, onCancel }: Props) => {
 
     return (
         <div>
-            <h3 className="mb-4 text-lg font-medium">Connect to PostgreSQL Server</h3>
+            <h3 className="mb-4 text-lg font-medium">Connect to {databaseTypeOptions.find(o => o.value === databaseType)?.label} Server</h3>
             <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
                 Enter your server credentials to discover available databases
             </p>
@@ -111,6 +121,35 @@ export const ServerConnectionComponent = ({ onConnected, onCancel }: Props) => {
                     className="max-w-[250px] grow"
                     placeholder="e.g. Production Server"
                 />
+            </div>
+
+            <div className="mb-1 flex w-full items-center">
+                <div className="min-w-[150px]">Database Type</div>
+                <div className="flex items-center">
+                    <Select
+                        value={databaseType}
+                        onChange={(value) => {
+                            setDatabaseType(value);
+                            // Update default port based on type
+                            const defaultPorts: Record<DatabaseType, number> = {
+                                [DatabaseType.POSTGRES]: 5432,
+                                [DatabaseType.MYSQL]: 3306,
+                                [DatabaseType.MARIADB]: 3306,
+                                [DatabaseType.MONGODB]: 27017,
+                            };
+                            setServerConnection(prev => ({ ...prev, port: defaultPorts[value] }));
+                            setConnectionError(null);
+                        }}
+                        options={databaseTypeOptions}
+                        size="small"
+                        className="w-[200px]"
+                    />
+                    <img
+                        src={getDatabaseLogoFromType(databaseType)}
+                        alt="databaseIcon"
+                        className="ml-2 h-4 w-4"
+                    />
+                </div>
             </div>
 
             <div className="mb-1 flex w-full items-center">
