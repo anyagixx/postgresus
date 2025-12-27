@@ -7,20 +7,20 @@ import (
 	"log/slog"
 	"time"
 
-	"postgresus-backend/internal/features/databases"
 	"postgresus-backend/internal/features/databases/databases/postgresql"
+	"postgresus-backend/internal/storage"
 	users_models "postgresus-backend/internal/features/users/models"
 	"postgresus-backend/internal/util/encryption"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"gorm.io/gorm"
 )
 
 type ServerService struct {
-	serverRepository   *ServerRepository
-	databaseRepository *databases.DatabaseRepository
-	logger             *slog.Logger
-	fieldEncryptor     encryption.FieldEncryptor
+	serverRepository *ServerRepository
+	logger           *slog.Logger
+	fieldEncryptor  encryption.FieldEncryptor
 }
 
 func (s *ServerService) CreateServer(
@@ -89,8 +89,22 @@ const (
 	DeleteServerOptionCancel  DeleteServerOption = "cancel"  // Option C: Cancel deletion
 )
 
-func (s *ServerService) GetDatabasesByServerID(serverID uuid.UUID) ([]*databases.Database, error) {
-	return s.databaseRepository.FindByServerID(serverID)
+func (s *ServerService) GetDatabasesByServerID(serverID uuid.UUID) ([]map[string]interface{}, error) {
+	var databases []map[string]interface{}
+	
+	err := storage.GetDb().
+		Table("databases").
+		Select("databases.id, databases.name, databases.type, databases.workspace_id, databases.server_id").
+		Joins("LEFT JOIN servers ON databases.server_id = servers.id").
+		Where("databases.server_id = ?", serverID).
+		Order("databases.name ASC").
+		Find(&databases).Error
+	
+	if err != nil {
+		return nil, err
+	}
+	
+	return databases, nil
 }
 
 func (s *ServerService) DeleteServer(
@@ -108,28 +122,48 @@ func (s *ServerService) DeleteServer(
 	}
 
 	// Check if there are databases linked to this server
-	linkedDatabases, err := s.databaseRepository.FindByServerID(serverID)
-	if err != nil {
+	var dbCount int64
+	if err := storage.GetDb().
+		Table("databases").
+		Where("server_id = ?", serverID).
+		Count(&dbCount).Error; err != nil {
 		return fmt.Errorf("failed to check linked databases: %w", err)
 	}
 
-	if len(linkedDatabases) > 0 {
+	if dbCount > 0 {
 		switch option {
 		case DeleteServerOptionUnlink:
 			// Option A: Unlink all databases from server (set server_id = NULL)
-			if err := s.databaseRepository.UnlinkFromServer(serverID); err != nil {
+			if err := storage.GetDb().
+				Model(&struct {
+					ID       uuid.UUID `gorm:"column:id"`
+					ServerID *uuid.UUID `gorm:"column:server_id"`
+				}{}).
+				Table("databases").
+				Where("server_id = ?", serverID).
+				Update("server_id", nil).Error; err != nil {
 				return fmt.Errorf("failed to unlink databases from server: %w", err)
 			}
-			s.logger.Info("Unlinked databases from server", "server_id", serverID, "count", len(linkedDatabases))
+			s.logger.Info("Unlinked databases from server", "server_id", serverID, "count", dbCount)
 
 		case DeleteServerOptionCascade:
 			// Option B: Delete all linked databases, then delete server
-			for _, db := range linkedDatabases {
-				if err := s.databaseRepository.Delete(db.ID); err != nil {
-					return fmt.Errorf("failed to delete database %s: %w", db.ID, err)
+			// Get database IDs first
+			var dbIDs []uuid.UUID
+			if err := storage.GetDb().
+				Table("databases").
+				Where("server_id = ?", serverID).
+				Pluck("id", &dbIDs).Error; err != nil {
+				return fmt.Errorf("failed to get database IDs: %w", err)
+			}
+
+			// Delete each database using transaction
+			for _, dbID := range dbIDs {
+				if err := s.deleteDatabase(dbID); err != nil {
+					return fmt.Errorf("failed to delete database %s: %w", dbID, err)
 				}
 			}
-			s.logger.Info("Deleted databases with server", "server_id", serverID, "count", len(linkedDatabases))
+			s.logger.Info("Deleted databases with server", "server_id", serverID, "count", dbCount)
 
 		case DeleteServerOptionCancel:
 			// Option C: Cancel deletion
@@ -142,6 +176,49 @@ func (s *ServerService) DeleteServer(
 
 	// Delete the server
 	return s.serverRepository.DeleteByID(serverID)
+}
+
+// deleteDatabase deletes a database and its related data
+func (s *ServerService) deleteDatabase(dbID uuid.UUID) error {
+	return storage.GetDb().Transaction(func(tx *gorm.DB) error {
+		// Get database type
+		var dbType string
+		if err := tx.Table("databases").Where("id = ?", dbID).Pluck("type", &dbType).Error; err != nil {
+			return err
+		}
+
+		// Delete from specific database table
+		switch dbType {
+		case "postgresql":
+			if err := tx.Table("postgresql_databases").Where("database_id = ?", dbID).Delete(nil).Error; err != nil {
+				return err
+			}
+		case "mysql":
+			if err := tx.Table("mysql_databases").Where("database_id = ?", dbID).Delete(nil).Error; err != nil {
+				return err
+			}
+		case "mariadb":
+			if err := tx.Table("mariadb_databases").Where("database_id = ?", dbID).Delete(nil).Error; err != nil {
+				return err
+			}
+		case "mongodb":
+			if err := tx.Table("mongodb_databases").Where("database_id = ?", dbID).Delete(nil).Error; err != nil {
+				return err
+			}
+		}
+
+		// Delete notifier associations
+		if err := tx.Table("database_notifiers").Where("database_id = ?", dbID).Delete(nil).Error; err != nil {
+			return err
+		}
+
+		// Delete the database
+		if err := tx.Table("databases").Where("id = ?", dbID).Delete(nil).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
 }
 
 func (s *ServerService) GetServer(

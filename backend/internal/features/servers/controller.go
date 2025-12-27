@@ -262,11 +262,6 @@ func (c *ServerController) GetLinkedDatabases(ctx *gin.Context) {
 		return
 	}
 
-	// Hide sensitive data from databases
-	for _, db := range databases {
-		db.HideSensitiveData()
-	}
-
 	ctx.JSON(http.StatusOK, databases)
 }
 
