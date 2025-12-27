@@ -302,20 +302,35 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   const dbsToCheck = grouped[serverName];
+                                  const totalCount = dbsToCheck.length;
+                                  
                                   notification.info({
                                     message: 'Checking connections...',
-                                    description: `Testing ${dbsToCheck.length} databases`,
+                                    description: `Testing ${totalCount} databases`,
                                     key: 'check-connections',
                                     duration: 0
                                   });
+                                  
                                   // Check all databases connections
-                                  Promise.all(
+                                  Promise.allSettled(
                                     dbsToCheck.map(db =>
                                       databaseApi.testDatabaseConnection(db.id)
-                                        .then(() => ({ id: db.id, name: db.name, ok: true }))
-                                        .catch(() => ({ id: db.id, name: db.name, ok: false }))
+                                        .then(() => ({ id: db.id, name: db.name, ok: true, error: null }))
+                                        .catch((error: Error) => ({ 
+                                          id: db.id, 
+                                          name: db.name, 
+                                          ok: false, 
+                                          error: error.message || 'Connection failed' 
+                                        }))
                                     )
-                                  ).then((results: { id: string; name: string; ok: boolean }[]) => {
+                                  ).then((settledResults) => {
+                                    const results: { id: string; name: string; ok: boolean; error: string | null }[] = 
+                                      settledResults.map(result => 
+                                        result.status === 'fulfilled' 
+                                          ? result.value 
+                                          : { id: '', name: 'Unknown', ok: false, error: 'Unexpected error' }
+                                      );
+                                    
                                     const okResults = results.filter(r => r.ok);
                                     const failResults = results.filter(r => !r.ok);
 
@@ -327,21 +342,50 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                                         duration: 5
                                       });
                                     } else if (okResults.length === 0) {
+                                      const errorDetails = failResults
+                                        .map(r => `${r.name}: ${r.error || 'Connection failed'}`)
+                                        .join('\n');
                                       notification.error({
                                         message: 'Connection Failed ❌',
-                                        description: `All ${failResults.length} databases failed to connect`,
+                                        description: (
+                                          <div>
+                                            <div>All {failResults.length} databases failed to connect:</div>
+                                            <div className="mt-2 text-xs font-mono whitespace-pre-wrap max-h-40 overflow-y-auto">
+                                              {errorDetails}
+                                            </div>
+                                          </div>
+                                        ),
                                         key: 'check-connections',
-                                        duration: 8
+                                        duration: 15
                                       });
                                     } else {
-                                      const failedNames = failResults.map(r => r.name).join(', ');
+                                      const failedDetails = failResults
+                                        .map(r => `${r.name}: ${r.error || 'Connection failed'}`)
+                                        .join('\n');
                                       notification.warning({
                                         message: `Partial Success ⚠️`,
-                                        description: `${okResults.length} connected, ${failResults.length} failed: ${failedNames}`,
+                                        description: (
+                                          <div>
+                                            <div>
+                                              {okResults.length} connected, {failResults.length} failed:
+                                            </div>
+                                            <div className="mt-2 text-xs font-mono whitespace-pre-wrap max-h-40 overflow-y-auto">
+                                              {failedDetails}
+                                            </div>
+                                          </div>
+                                        ),
                                         key: 'check-connections',
-                                        duration: 10
+                                        duration: 15
                                       });
                                     }
+                                    loadDatabases(true);
+                                  }).catch((error) => {
+                                    notification.error({
+                                      message: 'Error checking connections ❌',
+                                      description: `Failed to check connections: ${error.message || 'Unknown error'}`,
+                                      key: 'check-connections',
+                                      duration: 10
+                                    });
                                     loadDatabases(true);
                                   });
                                 }}

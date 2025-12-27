@@ -276,10 +276,28 @@ func (s *DatabaseService) TestDatabaseConnection(
 	if err != nil {
 		lastSaveError := err.Error()
 		database.LastBackupErrorMessage = &lastSaveError
+		
+		// Update health status to UNAVAILABLE on connection failure
+		unavailableStatus := HealthStatusUnavailable
+		if updateErr := s.SetHealthStatus(databaseID, &unavailableStatus); updateErr != nil {
+			s.logger.Error("Failed to update health status", "error", updateErr)
+		}
+		
+		_, saveErr := s.dbRepository.Save(database)
+		if saveErr != nil {
+			return saveErr
+		}
+		
 		return err
 	}
 
 	database.LastBackupErrorMessage = nil
+
+	// Update health status to AVAILABLE on successful connection
+	availableStatus := HealthStatusAvailable
+	if updateErr := s.SetHealthStatus(databaseID, &availableStatus); updateErr != nil {
+		s.logger.Error("Failed to update health status", "error", updateErr)
+	}
 
 	_, err = s.dbRepository.Save(database)
 	if err != nil {
