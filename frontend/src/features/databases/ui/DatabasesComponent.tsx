@@ -1,5 +1,5 @@
-import { CaretDownOutlined, CaretRightOutlined } from '@ant-design/icons';
-import { Button, Modal, Spin } from 'antd';
+import { CaretDownOutlined, CaretRightOutlined, EditOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
+import { Button, Modal, Spin, Tooltip, message } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 
 import { databaseApi } from '../../../entity/databases';
@@ -29,6 +29,9 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
   const [isShowAddDatabase, setIsShowAddDatabase] = useState(false);
   const [isShowDiscovery, setIsShowDiscovery] = useState(false);
   const [selectedDatabaseId, setSelectedDatabaseId] = useState<string | undefined>(undefined);
+
+  // Hover state for server groups
+  const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
 
   // Collapsed server groups state (stored in localStorage)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
@@ -230,28 +233,93 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                   const serverAddress = serverName !== '__ungrouped__' ? getServerAddress(grouped[serverName]) : null;
 
                   return (
-                    <div key={serverName} className="mb-3">
+                    <div
+                      key={serverName}
+                      className="group mb-3"
+                      onMouseEnter={() => setHoveredGroup(serverName)}
+                      onMouseLeave={() => setHoveredGroup(null)}
+                    >
                       {/* Server header - clickable */}
-                      <div
-                        className="mb-1 flex cursor-pointer select-none items-center gap-1 rounded px-1 py-0.5 text-xs font-semibold uppercase text-gray-500 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-                        onClick={() => toggleGroupCollapse(serverName)}
-                      >
-                        {isCollapsed ? (
-                          <CaretRightOutlined className="text-[10px]" />
-                        ) : (
-                          <CaretDownOutlined className="text-[10px]" />
-                        )}
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-1">
-                            <span className="text-base">📦</span>
-                            {displayName}
-                          </div>
-                          {serverAddress && (
-                            <span className="ml-5 text-[9px] font-normal normal-case text-gray-400">
-                              {serverAddress}
-                            </span>
+                      <div className="mb-1 flex items-center gap-1 rounded px-1 py-0.5 text-xs font-semibold uppercase text-gray-500 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800">
+                        <div
+                          className="flex flex-1 cursor-pointer select-none items-center gap-1"
+                          onClick={() => toggleGroupCollapse(serverName)}
+                        >
+                          {isCollapsed ? (
+                            <CaretRightOutlined className="text-[10px]" />
+                          ) : (
+                            <CaretDownOutlined className="text-[10px]" />
                           )}
+                          <div className="flex flex-col">
+                            <div className="flex items-center gap-1">
+                              <span className="text-base">📦</span>
+                              {displayName}
+                            </div>
+                            {serverAddress && (
+                              <span className="ml-5 text-[9px] font-normal normal-case text-gray-400">
+                                {serverAddress}
+                              </span>
+                            )}
+                          </div>
                         </div>
+
+                        {/* Quick action buttons - visible on hover */}
+                        {serverName !== '__ungrouped__' && isCanManageDBs && (
+                          <div className={`flex items-center gap-0.5 transition-opacity ${hoveredGroup === serverName ? 'opacity-100' : 'opacity-0'}`}>
+                            <Tooltip title="Check all connections">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const dbsToCheck = grouped[serverName];
+                                  message.loading({ content: `Checking ${dbsToCheck.length} databases...`, key: 'check-connections' });
+                                  // Check all databases connections
+                                  Promise.all(
+                                    dbsToCheck.map(db =>
+                                      databaseApi.testDatabaseConnection(db.id)
+                                        .then(() => ({ id: db.id, ok: true }))
+                                        .catch(() => ({ id: db.id, ok: false }))
+                                    )
+                                  ).then((results: { id: string; ok: boolean }[]) => {
+                                    const ok = results.filter(r => r.ok).length;
+                                    const fail = results.filter(r => !r.ok).length;
+                                    if (fail === 0) {
+                                      message.success({ content: `All ${ok} databases connected!`, key: 'check-connections' });
+                                    } else {
+                                      message.warning({ content: `${ok} connected, ${fail} failed`, key: 'check-connections' });
+                                    }
+                                    loadDatabases(true);
+                                  });
+                                }}
+                                className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-blue-500 dark:hover:bg-gray-700"
+                              >
+                                <SyncOutlined className="text-[10px]" />
+                              </button>
+                            </Tooltip>
+                            <Tooltip title="Add database to this server">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setIsShowDiscovery(true);
+                                }}
+                                className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-green-500 dark:hover:bg-gray-700"
+                              >
+                                <PlusOutlined className="text-[10px]" />
+                              </button>
+                            </Tooltip>
+                            <Tooltip title="Rename server (coming soon)">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  message.info('Rename server feature coming soon!');
+                                }}
+                                className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-orange-500 dark:hover:bg-gray-700"
+                              >
+                                <EditOutlined className="text-[10px]" />
+                              </button>
+                            </Tooltip>
+                          </div>
+                        )}
+
                         <span className="ml-auto text-[10px] font-normal">
                           {dbCount}
                         </span>
