@@ -119,7 +119,9 @@ export const DiscoveryReadOnlyComponent = ({
 
             // Grant access to all selected databases (not just the first one)
             if (selectedDatabases.length > 1) {
+                const dbType = (serverConnection.databaseType as DatabaseType) || DatabaseType.POSTGRES;
                 const grantResponse = await databaseApi.grantReadOnlyAccess({
+                    databaseType: dbType,
                     username: response.username,
                     host: serverConnection.host,
                     port: serverConnection.port,

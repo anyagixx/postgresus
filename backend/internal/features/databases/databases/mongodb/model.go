@@ -284,7 +284,7 @@ func (m *MongodbDatabase) CreateReadOnlyUser(
 
 	maxRetries := 3
 	for attempt := range maxRetries {
-		newUsername := fmt.Sprintf("postgresus-%s", uuid.New().String()[:8])
+		newUsername := fmt.Sprintf("mongo-%s", uuid.New().String()[:8])
 		newPassword := uuid.New().String()
 
 		adminDB := client.Database(authDB)

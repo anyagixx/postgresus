@@ -170,6 +170,7 @@ export interface DiscoverDatabasesResponse {
 }
 
 export interface GrantReadOnlyAccessRequest {
+  databaseType: string; // POSTGRES, MYSQL, MARIADB, MONGODB
   username: string;
   host: string;
   port: number;

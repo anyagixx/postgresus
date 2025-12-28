@@ -95,7 +95,7 @@ func Test_CreateReadOnlyUser_UserCanReadButNotWrite(t *testing.T) {
 			assert.NoError(t, err)
 			assert.NotEmpty(t, username)
 			assert.NotEmpty(t, password)
-			assert.True(t, strings.HasPrefix(username, "postgresus-"))
+			assert.True(t, strings.HasPrefix(username, "mongo-"))
 
 			if err != nil {
 				return

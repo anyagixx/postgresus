@@ -258,7 +258,7 @@ func (m *MysqlDatabase) CreateReadOnlyUser(
 
 	maxRetries := 3
 	for attempt := range maxRetries {
-		newUsername := fmt.Sprintf("postgresus-%s", uuid.New().String()[:8])
+		newUsername := fmt.Sprintf("mysql-%s", uuid.New().String()[:8])
 		newPassword := uuid.New().String()
 
 		tx, err := db.BeginTx(ctx, nil)
@@ -323,6 +323,98 @@ func (m *MysqlDatabase) CreateReadOnlyUser(
 	}
 
 	return "", "", errors.New("failed to generate unique username after 3 attempts")
+}
+
+// GrantReadOnlyAccess grants read-only privileges to an existing user on a specific database.
+// This is used in Discovery flow to give the read-only user access to multiple databases.
+//
+// The method performs the following operations:
+// 1. Connects to the target database using admin credentials
+// 2. Grants SELECT, SHOW VIEW, LOCK TABLES, TRIGGER, EVENT privileges on the database
+// 3. Grants PROCESS privilege on all databases (needed for backup operations)
+// 4. Flushes privileges
+func GrantReadOnlyAccess(
+	ctx context.Context,
+	logger *slog.Logger,
+	host string,
+	port int,
+	adminUsername string,
+	adminPassword string,
+	isHttps bool,
+	targetDatabase string,
+	readOnlyUsername string,
+) error {
+	tlsConfig := "false"
+	if isHttps {
+		tlsConfig = "true"
+	}
+
+	dsn := fmt.Sprintf(
+		"%s:%s@tcp(%s:%d)/%s?parseTime=true&timeout=60s&readTimeout=60s&writeTimeout=60s&tls=%s&charset=utf8mb4",
+		adminUsername,
+		adminPassword,
+		host,
+		port,
+		targetDatabase,
+		tlsConfig,
+	)
+
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		return fmt.Errorf("failed to connect to database '%s': %w", targetDatabase, err)
+	}
+	defer func() {
+		if closeErr := db.Close(); closeErr != nil {
+			logger.Error("Failed to close connection", "error", closeErr)
+		}
+	}()
+
+	db.SetConnMaxLifetime(60 * time.Second)
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
+	// Verify connection
+	if err := db.PingContext(ctx); err != nil {
+		return fmt.Errorf("failed to ping database '%s': %w", targetDatabase, err)
+	}
+
+	// Check if user exists
+	var userExists int
+	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM mysql.user WHERE User = ? AND Host = '%'", readOnlyUsername).Scan(&userExists)
+	if err != nil {
+		return fmt.Errorf("failed to check if user exists: %w", err)
+	}
+	if userExists == 0 {
+		return fmt.Errorf("user '%s' does not exist", readOnlyUsername)
+	}
+
+	// Grant privileges on the target database
+	_, err = db.ExecContext(ctx, fmt.Sprintf(
+		"GRANT SELECT, SHOW VIEW, LOCK TABLES, TRIGGER, EVENT ON `%s`.* TO '%s'@'%%'",
+		targetDatabase,
+		readOnlyUsername,
+	))
+	if err != nil {
+		return fmt.Errorf("failed to grant database privileges: %w", err)
+	}
+
+	// Grant PROCESS privilege (already granted during user creation, but ensure it exists)
+	_, err = db.ExecContext(ctx, fmt.Sprintf(
+		"GRANT PROCESS ON *.* TO '%s'@'%%'",
+		readOnlyUsername,
+	))
+	if err != nil {
+		logger.Warn("Failed to grant PROCESS privilege (may already be granted)", "error", err)
+	}
+
+	// Flush privileges
+	_, err = db.ExecContext(ctx, "FLUSH PRIVILEGES")
+	if err != nil {
+		return fmt.Errorf("failed to flush privileges: %w", err)
+	}
+
+	logger.Info("Granted read-only access", "database", targetDatabase, "username", readOnlyUsername)
+	return nil
 }
 
 func (m *MysqlDatabase) buildDSN(password string, database string) string {
