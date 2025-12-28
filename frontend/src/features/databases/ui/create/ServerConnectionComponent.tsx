@@ -45,7 +45,7 @@ export const ServerConnectionComponent = ({ preselectedServer, preselectedServer
     const [serverConnection, setServerConnection] = useState<ServerConnection>({
         host: preselectedServer?.host || '',
         port: preselectedServer?.port || defaultPorts[initialDatabaseType],
-        username: preselectedServer?.username || '',
+        username: '', // Username should be entered by user, not prefilled
         password: '',
         isHttps: preselectedServer?.isHttps || false,
     });
@@ -58,8 +58,8 @@ export const ServerConnectionComponent = ({ preselectedServer, preselectedServer
             setServerConnection({
                 host: preselectedServer.host,
                 port: preselectedServer.port,
-                username: preselectedServer.username,
-                password: '', // Password is not stored in server, user must enter it
+                username: '', // Username should be entered by user, not prefilled
+                password: '', // Password should be entered by user, not prefilled
                 isHttps: preselectedServer.isHttps,
             });
             if (preselectedServerName) {
