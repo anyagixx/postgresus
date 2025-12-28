@@ -83,6 +83,7 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
   });
 
   const [activeTab, setActiveTab] = useState<string>('databases');
+  const [trashRefreshKey, setTrashRefreshKey] = useState<number>(0);
 
   const handleRenameServer = async () => {
     if (!renameModal.serverId || !renameModal.newName.trim()) return;
@@ -210,6 +211,8 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
       }
       
       loadDatabases(true);
+      // Обновляем корзину, чтобы удаленная база сразу появилась
+      setTrashRefreshKey(prev => prev + 1);
     } catch (error) {
       notification.error({
         message: 'Failed to delete database',
@@ -658,6 +661,7 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                         loadDatabases(true);
                         setActiveTab('databases');
                       }}
+                      refreshKey={trashRefreshKey}
                     />
                   ),
                 },

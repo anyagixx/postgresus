@@ -11,9 +11,10 @@ interface Props {
   workspaceId: string;
   onClose: () => void;
   onRestore?: () => void;
+  refreshKey?: number;
 }
 
-export const TrashComponent = ({ workspaceId, onRestore }: Props): React.ReactElement => {
+export const TrashComponent = ({ workspaceId, onRestore, refreshKey }: Props): React.ReactElement => {
   const { notification } = App.useApp();
   const [isLoading, setIsLoading] = useState(true);
   const [databases, setDatabases] = useState<Database[]>([]);
@@ -46,7 +47,7 @@ export const TrashComponent = ({ workspaceId, onRestore }: Props): React.ReactEl
 
   useEffect(() => {
     loadDeletedDatabases();
-  }, [workspaceId]);
+  }, [workspaceId, refreshKey]);
 
   const handleRestore = async (database: Database) => {
     setRestoringId(database.id);
@@ -110,9 +111,11 @@ export const TrashComponent = ({ workspaceId, onRestore }: Props): React.ReactEl
 
   const getDaysUntilPermanentDelete = (deletedAt?: Date): number => {
     if (!deletedAt) return 0;
-    const deleted = dayjs(deletedAt);
+    // Нормализуем к началу дня для точного подсчета
+    const deleted = dayjs(deletedAt).startOf('day');
     const permanentDeleteDate = deleted.add(30, 'days');
-    const daysLeft = permanentDeleteDate.diff(dayjs(), 'day');
+    const now = dayjs().startOf('day');
+    const daysLeft = permanentDeleteDate.diff(now, 'day');
     return Math.max(0, daysLeft);
   };
 
@@ -247,10 +250,18 @@ export const TrashComponent = ({ workspaceId, onRestore }: Props): React.ReactEl
         <div className="py-4">
           <div className="mb-4 rounded bg-red-50 p-3 dark:bg-red-900/20">
             <p className="text-sm font-semibold text-red-800 dark:text-red-200">
-              ⚠️ Warning: This action cannot be undone!
+              ⚠️ Critical Warning: This action cannot be undone!
             </p>
             <p className="mt-1 text-xs text-red-700 dark:text-red-300">
-              This will permanently delete the database and all its backups. This action cannot be reversed.
+              <strong>This will permanently delete:</strong>
+            </p>
+            <ul className="mt-2 ml-4 list-disc text-xs text-red-700 dark:text-red-300">
+              <li>The database configuration</li>
+              <li><strong>All backups</strong> associated with this database</li>
+              <li>All restore history</li>
+            </ul>
+            <p className="mt-2 text-xs font-semibold text-red-800 dark:text-red-200">
+              ⛔ This action is irreversible. You will not be able to recover the database or its backups.
             </p>
           </div>
 
