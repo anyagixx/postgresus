@@ -7,6 +7,7 @@ import (
 	"postgresus-backend/internal/features/databases"
 	healthcheck_config "postgresus-backend/internal/features/healthcheck/config"
 	"postgresus-backend/internal/util/logger"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -48,6 +49,17 @@ func (uc *CheckDatabaseHealthUseCase) Execute(
 
 	heathcheckAttempt, err := uc.healthcheckDatabase(now, database)
 	if err != nil {
+		// If error is due to decryption failure, skip this healthcheck attempt
+		// This prevents marking databases as unavailable due to encryption key issues
+		if isDecryptionError(err) {
+			logger.GetLogger().Warn(
+				"Skipping healthcheck due to decryption error - cannot determine database status",
+				slog.String("database_id", database.ID.String()),
+				slog.String("database_name", database.Name),
+				slog.String("error", err.Error()),
+			)
+			return nil // Skip this attempt, don't update status
+		}
 		return err
 	}
 
@@ -155,6 +167,12 @@ func (uc *CheckDatabaseHealthUseCase) healthcheckDatabase(
 	healthStatus := databases.HealthStatusAvailable
 	err := uc.databaseService.TestDatabaseConnectionDirect(database)
 	if err != nil {
+		// If error is due to decryption failure, return error to skip this attempt
+		// This prevents marking database as unavailable due to encryption key issues
+		if isDecryptionError(err) {
+			return nil, err
+		}
+
 		healthStatus = databases.HealthStatusUnavailable
 		logger.GetLogger().
 			Error(
@@ -252,4 +270,15 @@ func (uc *CheckDatabaseHealthUseCase) sendDbStatusNotification(
 		)
 	}
 
+}
+
+// isDecryptionError checks if the error is related to password decryption failure
+// This happens when encryption key has changed (e.g., after container restart without volume)
+func isDecryptionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "failed to decrypt password") ||
+		strings.Contains(errStr, "failed to decrypt")
 }
