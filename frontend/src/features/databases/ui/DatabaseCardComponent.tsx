@@ -56,15 +56,7 @@ export const DatabaseCardComponent = ({
               className="h-4 w-4"
             />
           )}
-          {database.serverName ? (
-            <span>
-              <span className="text-gray-500 dark:text-gray-400">{database.serverName}</span>
-              <span className="mx-1 text-gray-400">/</span>
-              {database.name}
-            </span>
-          ) : (
-            database.name
-          )}
+          {database.name}
         </div>
 
         <div className="ml-auto flex items-center gap-1">
