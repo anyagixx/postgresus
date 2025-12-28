@@ -3,7 +3,6 @@ package databases
 import (
 	"log/slog"
 	"postgresus-backend/internal/config"
-	users_models "postgresus-backend/internal/features/users/models"
 	"time"
 )
 
