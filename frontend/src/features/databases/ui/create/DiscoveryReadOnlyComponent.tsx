@@ -6,8 +6,12 @@ import {
     DatabaseType,
     type DiscoveredDatabase,
     type PostgresqlDatabase,
+    type MysqlDatabase,
+    type MariadbDatabase,
     type ServerConnection,
     databaseApi,
+    MysqlVersion,
+    MariadbVersion,
 } from '../../../../entity/databases';
 
 interface Props {
@@ -35,18 +39,49 @@ export const DiscoveryReadOnlyComponent = ({
     // by using the database object directly without looking up from DB
     const createTempDatabase = (): Database => {
         const firstDb = selectedDatabases[0];
-        return {
+        // Get database type from serverConnection, fallback to POSTGRES for backward compatibility
+        const dbType = (serverConnection.databaseType as DatabaseType) || DatabaseType.POSTGRES;
+        
+        const baseDatabase: Database = {
             name: firstDb.name,
-            type: DatabaseType.POSTGRES,
-            postgresql: {
-                host: serverConnection.host,
-                port: serverConnection.port,
-                username: serverConnection.username,
-                password: serverConnection.password,
-                database: firstDb.name,
-                isHttps: serverConnection.isHttps,
-            } as PostgresqlDatabase,
-        } as Database;
+            type: dbType,
+            id: undefined as unknown as string,
+            workspaceId: undefined as unknown as string,
+            notifiers: [],
+        };
+
+        const connectionData = {
+            host: serverConnection.host,
+            port: serverConnection.port,
+            username: serverConnection.username,
+            password: serverConnection.password,
+            database: firstDb.name,
+            isHttps: serverConnection.isHttps,
+        };
+
+        // Create appropriate database config based on type
+        switch (dbType) {
+            case DatabaseType.MYSQL:
+                baseDatabase.mysql = {
+                    id: undefined as unknown as string,
+                    version: MysqlVersion.MysqlVersion80, // Default version, backend will handle actual detection
+                    ...connectionData,
+                } as MysqlDatabase;
+                break;
+            case DatabaseType.MARIADB:
+                baseDatabase.mariadb = {
+                    id: undefined as unknown as string,
+                    version: MariadbVersion.MariadbVersion106, // Default version, backend will handle actual detection
+                    ...connectionData,
+                } as MariadbDatabase;
+                break;
+            case DatabaseType.POSTGRES:
+            default:
+                baseDatabase.postgresql = connectionData as PostgresqlDatabase;
+                break;
+        }
+
+        return baseDatabase;
     };
 
     const checkReadOnlyUser = async (): Promise<boolean> => {
@@ -142,6 +177,24 @@ export const DiscoveryReadOnlyComponent = ({
         );
     }
 
+    // Get database type name for display
+    const getDatabaseTypeName = (): string => {
+        const dbType = (serverConnection.databaseType as DatabaseType) || DatabaseType.POSTGRES;
+        switch (dbType) {
+            case DatabaseType.MYSQL:
+                return 'MySQL';
+            case DatabaseType.MARIADB:
+                return 'MariaDB';
+            case DatabaseType.MONGODB:
+                return 'MongoDB';
+            case DatabaseType.POSTGRES:
+            default:
+                return 'PostgreSQL';
+        }
+    };
+
+    const databaseTypeName = getDatabaseTypeName();
+
     return (
         <div>
             <div className="mb-5">
@@ -153,7 +206,7 @@ export const DiscoveryReadOnlyComponent = ({
                 </p>
 
                 <p className="mb-2">
-                    A read-only user is a PostgreSQL user with limited permissions that can only read
+                    A read-only user is a {databaseTypeName} user with limited permissions that can only read
                     data from your database, not modify it. This is recommended because:
                 </p>
 
