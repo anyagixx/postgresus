@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"postgresus-backend/internal/features/databases/databases/mariadb"
 	"postgresus-backend/internal/features/databases/databases/mysql"
 	"postgresus-backend/internal/features/databases/databases/postgresql"
 	users_middleware "postgresus-backend/internal/features/users/middleware"
@@ -469,6 +470,15 @@ func (c *DatabaseController) DiscoverDatabases(ctx *gin.Context) {
 			IsHttps:  request.IsHttps,
 		}
 		databases, err = mysql.ListDatabasesOnServer(mysqlReq)
+	case DatabaseTypeMariadb:
+		mariadbReq := mariadb.DiscoveryRequest{
+			Host:     request.Host,
+			Port:     request.Port,
+			Username: request.Username,
+			Password: request.Password,
+			IsHttps:  request.IsHttps,
+		}
+		databases, err = mariadb.ListDatabasesOnServer(mariadbReq)
 	default:
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "unsupported database type: " + request.DatabaseType})
 		return
