@@ -1,4 +1,4 @@
-import { DeleteOutlined, RestoreOutlined } from '@ant-design/icons';
+import { DeleteOutlined, UndoOutlined } from '@ant-design/icons';
 import { App, Button, Modal, Spin, Tooltip, message } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
@@ -13,7 +13,7 @@ interface Props {
   onRestore?: () => void;
 }
 
-export const TrashComponent = ({ workspaceId, onClose, onRestore }: Props): JSX.Element => {
+export const TrashComponent = ({ workspaceId, onRestore }: Props): React.ReactElement => {
   const { notification } = App.useApp();
   const [isLoading, setIsLoading] = useState(true);
   const [databases, setDatabases] = useState<Database[]>([]);
@@ -180,7 +180,7 @@ export const TrashComponent = ({ workspaceId, onClose, onRestore }: Props): JSX.
                     <div className="ml-4 flex gap-2">
                       <Tooltip title="Restore database">
                         <Button
-                          icon={<RestoreOutlined />}
+                          icon={<UndoOutlined />}
                           onClick={() => handleRestore(database)}
                           loading={restoringId === database.id}
                           disabled={restoringId !== null}
