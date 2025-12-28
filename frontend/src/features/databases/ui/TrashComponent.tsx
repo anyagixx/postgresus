@@ -41,6 +41,7 @@ export const TrashComponent = ({ workspaceId, onClose, onRestore }: Props): JSX.
       });
     } finally {
       setIsLoading(false);
+    }
   };
 
   useEffect(() => {
