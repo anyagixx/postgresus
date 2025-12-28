@@ -1,6 +1,6 @@
 import { CopyOutlined } from '@ant-design/icons';
 import { App, Button, Input, InputNumber, Select, Switch } from 'antd';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import {
     type ServerConnection,
@@ -10,24 +10,63 @@ import {
     getDatabaseLogoFromType,
 } from '../../../../entity/databases';
 import { ConnectionStringParser } from '../../../../entity/databases/model/postgresql/ConnectionStringParser';
+import { type Server } from '../../../../entity/servers';
 
 interface Props {
+    preselectedServer?: Server | null;
+    preselectedServerName?: string;
     onConnected: (serverConnection: ServerConnection, databases: DiscoveredDatabase[], serverName: string, dbType: DatabaseType) => void;
     onCancel: () => void;
 }
 
-export const ServerConnectionComponent = ({ onConnected, onCancel }: Props) => {
+export const ServerConnectionComponent = ({ preselectedServer, preselectedServerName, onConnected, onCancel }: Props) => {
     const { message } = App.useApp();
 
-    const [serverName, setServerName] = useState(''); // User-friendly name like "Production Server"
-    const [databaseType, setDatabaseType] = useState<DatabaseType>(DatabaseType.POSTGRES);
+    // Convert server type string to DatabaseType enum
+    const serverTypeToDatabaseType = (type: string): DatabaseType => {
+        const upperType = type.toUpperCase();
+        if (upperType === 'POSTGRESQL') return DatabaseType.POSTGRES;
+        if (upperType === 'MYSQL') return DatabaseType.MYSQL;
+        if (upperType === 'MARIADB') return DatabaseType.MARIADB;
+        if (upperType === 'MONGODB') return DatabaseType.MONGODB;
+        return DatabaseType.POSTGRES; // Default fallback
+    };
+
+    const initialDatabaseType = preselectedServer ? serverTypeToDatabaseType(preselectedServer.type) : DatabaseType.POSTGRES;
+    const defaultPorts: Record<DatabaseType, number> = {
+        [DatabaseType.POSTGRES]: 5432,
+        [DatabaseType.MYSQL]: 3306,
+        [DatabaseType.MARIADB]: 3306,
+        [DatabaseType.MONGODB]: 27017,
+    };
+
+    const [serverName, setServerName] = useState(preselectedServerName || ''); // User-friendly name like "Production Server"
+    const [databaseType, setDatabaseType] = useState<DatabaseType>(initialDatabaseType);
     const [serverConnection, setServerConnection] = useState<ServerConnection>({
-        host: '',
-        port: 5432,
-        username: '',
+        host: preselectedServer?.host || '',
+        port: preselectedServer?.port || defaultPorts[initialDatabaseType],
+        username: preselectedServer?.username || '',
         password: '',
-        isHttps: false,
+        isHttps: preselectedServer?.isHttps || false,
     });
+
+    // Update connection when preselectedServer changes
+    useEffect(() => {
+        if (preselectedServer) {
+            const dbType = serverTypeToDatabaseType(preselectedServer.type);
+            setDatabaseType(dbType);
+            setServerConnection({
+                host: preselectedServer.host,
+                port: preselectedServer.port,
+                username: preselectedServer.username,
+                password: '', // Password is not stored in server, user must enter it
+                isHttps: preselectedServer.isHttps,
+            });
+            if (preselectedServerName) {
+                setServerName(preselectedServerName);
+            }
+        }
+    }, [preselectedServer, preselectedServerName]);
 
     const [isConnecting, setIsConnecting] = useState(false);
     const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -76,7 +115,9 @@ export const ServerConnectionComponent = ({ onConnected, onCancel }: Props) => {
 
         try {
             const response = await databaseApi.discoverDatabases(serverConnection);
-            onConnected(serverConnection, response.databases, serverName, databaseType);
+            // Use preselectedServerName if available, otherwise use entered serverName
+            const finalServerName = preselectedServerName || serverName;
+            onConnected(serverConnection, response.databases, finalServerName, databaseType);
         } catch (e) {
             setConnectionError((e as Error).message);
         }
@@ -84,8 +125,9 @@ export const ServerConnectionComponent = ({ onConnected, onCancel }: Props) => {
         setIsConnecting(false);
     };
 
+    // If preselectedServerName is provided, serverName is not required (it's already set)
     const isAllFieldsFilled =
-        serverName &&
+        (preselectedServerName || serverName) &&
         serverConnection.host &&
         serverConnection.port &&
         serverConnection.username &&
@@ -109,19 +151,21 @@ export const ServerConnectionComponent = ({ onConnected, onCancel }: Props) => {
                 </div>
             </div>
 
-            <div className="mb-1 flex w-full items-center">
-                <div className="min-w-[150px]">Server Name</div>
-                <Input
-                    value={serverName}
-                    onChange={(e) => {
-                        setServerName(e.target.value);
-                        setConnectionError(null);
-                    }}
-                    size="small"
-                    className="max-w-[250px] grow"
-                    placeholder="e.g. Production Server"
-                />
-            </div>
+            {!preselectedServerName && (
+                <div className="mb-1 flex w-full items-center">
+                    <div className="min-w-[150px]">Server Name</div>
+                    <Input
+                        value={serverName}
+                        onChange={(e) => {
+                            setServerName(e.target.value);
+                            setConnectionError(null);
+                        }}
+                        size="small"
+                        className="max-w-[250px] grow"
+                        placeholder="e.g. Production Server"
+                    />
+                </div>
+            )}
 
             <div className="mb-1 flex w-full items-center">
                 <div className="min-w-[150px]">Database Type</div>

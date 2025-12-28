@@ -30,6 +30,7 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
 
   const [isShowAddDatabase, setIsShowAddDatabase] = useState(false);
   const [isShowDiscovery, setIsShowDiscovery] = useState(false);
+  const [preselectedServerId, setPreselectedServerId] = useState<string | null>(null);
   const [selectedDatabaseId, setSelectedDatabaseId] = useState<string | undefined>(undefined);
 
   // Hover state for server groups
@@ -311,7 +312,14 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
 
   const addDatabaseButton = (
     <div className="mb-2 flex gap-2">
-      <Button type="primary" className="flex-1" onClick={() => setIsShowDiscovery(true)}>
+      <Button
+        type="primary"
+        className="flex-1"
+        onClick={() => {
+          setPreselectedServerId(null);
+          setIsShowDiscovery(true);
+        }}
+      >
         Discover & Add
       </Button>
       <Button type="default" className="flex-1" onClick={() => setIsShowAddDatabase(true)}>
@@ -539,6 +547,10 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  const firstDb = grouped[serverName][0];
+                                  if (firstDb?.serverId) {
+                                    setPreselectedServerId(firstDb.serverId);
+                                  }
                                   setIsShowDiscovery(true);
                                 }}
                                 className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-blue-500 dark:hover:bg-gray-700"
@@ -694,13 +706,18 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
 
           <DiscoveryCreateDatabaseComponent
             workspaceId={workspace.id}
+            preselectedServerId={preselectedServerId || undefined}
             onCreated={(databaseIds) => {
               if (databaseIds.length > 0) {
                 loadDatabases(false, databaseIds[0]);
               }
               setIsShowDiscovery(false);
+              setPreselectedServerId(null);
             }}
-            onClose={() => setIsShowDiscovery(false)}
+            onClose={() => {
+              setIsShowDiscovery(false);
+              setPreselectedServerId(null);
+            }}
           />
         </Modal>
       )}

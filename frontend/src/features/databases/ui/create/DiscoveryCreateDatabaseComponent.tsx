@@ -1,5 +1,5 @@
 import { Button, Modal } from 'antd';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { type BackupConfig, backupConfigApi, backupsApi } from '../../../../entity/backups';
 import {
@@ -11,6 +11,7 @@ import {
     type ServerConnection,
     databaseApi,
 } from '../../../../entity/databases';
+import { serverApi, type Server } from '../../../../entity/servers';
 import { EditBackupConfigComponent } from '../../../backups';
 import { EditDatabaseNotifiersComponent } from '../edit/EditDatabaseNotifiersComponent';
 import { DatabaseSelectionComponent } from './DatabaseSelectionComponent';
@@ -19,13 +20,14 @@ import { ServerConnectionComponent } from './ServerConnectionComponent';
 
 interface Props {
     workspaceId: string;
+    preselectedServerId?: string;
     onCreated: (databaseIds: string[]) => void;
     onClose: () => void;
 }
 
 type Step = 'server-connection' | 'select-databases' | 'readonly-user' | 'backup-config' | 'notifiers';
 
-export const DiscoveryCreateDatabaseComponent = ({ workspaceId, onCreated, onClose }: Props) => {
+export const DiscoveryCreateDatabaseComponent = ({ workspaceId, preselectedServerId, onCreated, onClose }: Props) => {
     const [step, setStep] = useState<Step>('server-connection');
     const [isCreating, setIsCreating] = useState(false);
     const [showBackupModal, setShowBackupModal] = useState(false);
@@ -36,6 +38,7 @@ export const DiscoveryCreateDatabaseComponent = ({ workspaceId, onCreated, onClo
     const [serverName, setServerName] = useState(''); // User-friendly server name
     const [discoveredDatabases, setDiscoveredDatabases] = useState<DiscoveredDatabase[]>([]);
     const [selectedDatabases, setSelectedDatabases] = useState<DiscoveredDatabase[]>([]);
+    const [preselectedServer, setPreselectedServer] = useState<Server | null>(null);
 
     // Backup config state (shared for all databases)
     const [backupConfig, setBackupConfig] = useState<BackupConfig | undefined>();
@@ -54,6 +57,20 @@ export const DiscoveryCreateDatabaseComponent = ({ workspaceId, onCreated, onClo
         }) as Database;
 
     const [templateDatabase, setTemplateDatabase] = useState<Database>(createTemplateDatabase());
+
+    // Load preselected server data if serverId is provided
+    useEffect(() => {
+        if (preselectedServerId) {
+            serverApi.getServer(preselectedServerId)
+                .then((server) => {
+                    setPreselectedServer(server);
+                    setServerName(server.name);
+                })
+                .catch((error) => {
+                    console.error('Failed to load server:', error);
+                });
+        }
+    }, [preselectedServerId]);
 
     const handleServerConnected = (
         connection: ServerConnection,
@@ -184,6 +201,8 @@ export const DiscoveryCreateDatabaseComponent = ({ workspaceId, onCreated, onClo
     if (step === 'server-connection') {
         return (
             <ServerConnectionComponent
+                preselectedServer={preselectedServer}
+                preselectedServerName={preselectedServer?.name}
                 onConnected={handleServerConnected}
                 onCancel={onClose}
             />
