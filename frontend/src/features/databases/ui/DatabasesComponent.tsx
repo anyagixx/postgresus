@@ -444,7 +444,7 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                           )}
                           <div className="flex flex-col">
                             <div className="flex items-center gap-1">
-                              <span className="text-base">📦</span>
+                              <span className="text-base">🖥</span>
                               {displayName}
                             </div>
                             {serverAddress && (

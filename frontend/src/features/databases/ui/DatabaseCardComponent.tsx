@@ -4,7 +4,7 @@ import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 
 import { backupConfigApi } from '../../../entity/backups';
-import { type Database } from '../../../entity/databases';
+import { type Database, getDatabaseLogoFromType } from '../../../entity/databases';
 import { HealthStatus } from '../../../entity/databases/model/HealthStatus';
 import type { Storage } from '../../../entity/storages';
 import { getStorageLogoFromType } from '../../../entity/storages/models/getStorageLogoFromType';
@@ -48,7 +48,14 @@ export const DatabaseCardComponent = ({
       onMouseLeave={() => setIsHovered(false)}
     >
       <div className="flex">
-        <div className="mb-1 font-bold">
+        <div className="mb-1 font-bold flex items-center gap-1">
+          {database.type && (
+            <img
+              src={getDatabaseLogoFromType(database.type)}
+              alt="databaseIcon"
+              className="h-4 w-4"
+            />
+          )}
           {database.serverName ? (
             <span>
               <span className="text-gray-500 dark:text-gray-400">{database.serverName}</span>
@@ -62,14 +69,11 @@ export const DatabaseCardComponent = ({
 
         <div className="ml-auto flex items-center gap-1">
           {database.healthStatus && (
-            <div className="pl-1">
+            <Tooltip title={database.healthStatus === HealthStatus.AVAILABLE ? 'Available' : 'Unavailable'}>
               <div
-                className={`rounded px-[6px] py-[2px] text-[10px] text-white ${database.healthStatus === HealthStatus.AVAILABLE ? 'bg-green-500' : 'bg-red-500'
-                  }`}
-              >
-                {database.healthStatus === HealthStatus.AVAILABLE ? 'Available' : 'Unavailable'}
-              </div>
-            </div>
+                className={`h-3 w-3 rounded-full ${database.healthStatus === HealthStatus.AVAILABLE ? 'bg-green-500' : 'bg-red-500'}`}
+              />
+            </Tooltip>
           )}
 
           {isCanManageDBs && onDelete && (
