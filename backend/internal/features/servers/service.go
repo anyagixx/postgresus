@@ -15,7 +15,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"gorm.io/gorm"
 )
 
 type ServerService struct {
