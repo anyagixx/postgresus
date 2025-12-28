@@ -8,10 +8,12 @@ import {
     type PostgresqlDatabase,
     type MysqlDatabase,
     type MariadbDatabase,
+    type MongodbDatabase,
     type ServerConnection,
     databaseApi,
     MysqlVersion,
     MariadbVersion,
+    MongodbVersion,
 } from '../../../../entity/databases';
 
 interface Props {
@@ -74,6 +76,19 @@ export const DiscoveryReadOnlyComponent = ({
                     version: MariadbVersion.MariadbVersion106, // Default version, backend will handle actual detection
                     ...connectionData,
                 } as MariadbDatabase;
+                break;
+            case DatabaseType.MONGODB:
+                baseDatabase.mongodb = {
+                    id: undefined as unknown as string,
+                    version: MongodbVersion.MongodbVersion70, // Default version, backend will handle actual detection
+                    host: connectionData.host,
+                    port: connectionData.port,
+                    username: connectionData.username,
+                    password: connectionData.password,
+                    database: connectionData.database,
+                    authDatabase: 'admin', // Default auth database for MongoDB
+                    useTls: connectionData.isHttps, // MongoDB uses useTls instead of isHttps
+                } as MongodbDatabase;
                 break;
             case DatabaseType.POSTGRES:
             default:

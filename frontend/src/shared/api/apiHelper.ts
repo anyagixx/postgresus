@@ -32,7 +32,7 @@ const handleOrThrowMessageIfResponseError = async (
       }
     }
 
-    throw new Error(errorMessage ?? `${url}: ${await response.text()}`);
+    throw new Error(errorMessage ?? `${url}: ${response.status} ${response.statusText}`);
   }
 };
 
