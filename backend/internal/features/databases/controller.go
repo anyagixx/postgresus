@@ -2,7 +2,7 @@ package databases
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"postgresus-backend/internal/features/databases/databases/mariadb"
@@ -673,7 +673,7 @@ func (c *DatabaseController) GrantReadOnlyAccess(ctx *gin.Context) {
 				request.Username,
 			)
 		default:
-			err = errors.New("grant read-only access not supported for database type: " + request.DatabaseType)
+			err = fmt.Errorf("grant read-only access not supported for database type: %s", request.DatabaseType)
 		}
 
 		if err != nil {
