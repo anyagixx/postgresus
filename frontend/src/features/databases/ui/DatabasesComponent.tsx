@@ -1,5 +1,5 @@
 import { CaretDownOutlined, CaretRightOutlined, DeleteOutlined, EditOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
-import { App, Button, Input, Modal, Radio, Spin, Tooltip, message } from 'antd';
+import { App, Button, Input, Modal, Radio, Spin, Tabs, Tooltip, message } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 
 import { databaseApi } from '../../../entity/databases';
@@ -10,6 +10,7 @@ import { useIsMobile } from '../../../shared/hooks';
 import { DiscoveryCreateDatabaseComponent } from './create/DiscoveryCreateDatabaseComponent';
 import { DatabaseCardComponent } from './DatabaseCardComponent';
 import { DatabaseComponent } from './DatabaseComponent';
+import { TrashComponent } from './TrashComponent';
 
 interface Props {
   contentHeight: number;
@@ -80,6 +81,8 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
     confirmName: '',
     loading: false,
   });
+
+  const [activeTab, setActiveTab] = useState<string>('databases');
 
   const handleRenameServer = async () => {
     if (!renameModal.serverId || !renameModal.newName.trim()) return;
@@ -348,7 +351,16 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
             className="w-full overflow-y-auto md:mx-3 md:w-[250px] md:min-w-[250px] md:pr-2"
             style={{ height: contentHeight }}
           >
-            {isCanManageDBs && addDatabaseButton}
+            <Tabs
+              activeKey={activeTab}
+              onChange={setActiveTab}
+              items={[
+                {
+                  key: 'databases',
+                  label: 'Databases',
+                  children: (
+                    <>
+                      {isCanManageDBs && addDatabaseButton}
 
             <div className="mb-2">
               <input
@@ -632,6 +644,25 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
             <div className="mx-3 text-center text-xs text-gray-500 dark:text-gray-400">
               Database - is a thing we are backing up
             </div>
+                    </>
+                  ),
+                },
+                {
+                  key: 'trash',
+                  label: 'Trash',
+                  children: (
+                    <TrashComponent
+                      workspaceId={workspace.id}
+                      onClose={() => setActiveTab('databases')}
+                      onRestore={() => {
+                        loadDatabases(true);
+                        setActiveTab('databases');
+                      }}
+                    />
+                  ),
+                },
+              ]}
+            />
           </div>
         )}
 
@@ -884,7 +915,7 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
               ⚠️ Warning: This action cannot be undone!
             </p>
             <p className="mt-1 text-xs text-red-700 dark:text-red-300">
-              This will permanently delete the database and all its configuration. All backup configurations and related data will be removed.
+              This will move the database to trash. It will be automatically deleted after 30 days. You can restore it from the trash before that.
             </p>
           </div>
 

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"postgresus-backend/internal/features/databases"
 	"postgresus-backend/internal/features/databases/databases/postgresql"
 	"postgresus-backend/internal/storage"
 	users_models "postgresus-backend/internal/features/users/models"
@@ -95,7 +96,7 @@ func (s *ServerService) GetDatabasesByServerID(serverID uuid.UUID) ([]map[string
 		Table("databases").
 		Select("databases.id, databases.name, databases.type, databases.workspace_id, databases.server_id").
 		Joins("LEFT JOIN servers ON databases.server_id = servers.id").
-		Where("databases.server_id = ?", serverID).
+		Where("databases.server_id = ? AND databases.deleted_at IS NULL", serverID).
 		Order("databases.name ASC").
 		Find(&databases).Error
 	
@@ -146,7 +147,7 @@ func (s *ServerService) DeleteServer(
 			s.logger.Info("Unlinked databases from server", "server_id", serverID, "count", dbCount)
 
 		case DeleteServerOptionCascade:
-			// Option B: Delete all linked databases, then delete server
+			// Option B: Soft delete all linked databases, then delete server
 			// Get database IDs first
 			var dbIDs []uuid.UUID
 			if err := storage.GetDb().
@@ -156,13 +157,14 @@ func (s *ServerService) DeleteServer(
 				return fmt.Errorf("failed to get database IDs: %w", err)
 			}
 
-			// Delete each database using transaction
+			// Soft delete each database (move to trash)
+			databasesRepo := &databases.DatabaseRepository{}
 			for _, dbID := range dbIDs {
-				if err := s.deleteDatabase(dbID); err != nil {
-					return fmt.Errorf("failed to delete database %s: %w", dbID, err)
+				if err := databasesRepo.Delete(dbID); err != nil {
+					return fmt.Errorf("failed to soft delete database %s: %w", dbID, err)
 				}
 			}
-			s.logger.Info("Deleted databases with server", "server_id", serverID, "count", dbCount)
+			s.logger.Info("Soft deleted databases with server", "server_id", serverID, "count", dbCount)
 
 		default:
 			return fmt.Errorf("invalid delete option: %s", option)
@@ -173,48 +175,8 @@ func (s *ServerService) DeleteServer(
 	return s.serverRepository.DeleteByID(serverID)
 }
 
-// deleteDatabase deletes a database and its related data
-func (s *ServerService) deleteDatabase(dbID uuid.UUID) error {
-	return storage.GetDb().Transaction(func(tx *gorm.DB) error {
-		// Get database type
-		var dbType string
-		if err := tx.Table("databases").Where("id = ?", dbID).Pluck("type", &dbType).Error; err != nil {
-			return err
-		}
-
-		// Delete from specific database table
-		switch dbType {
-		case "postgresql":
-			if err := tx.Table("postgresql_databases").Where("database_id = ?", dbID).Delete(nil).Error; err != nil {
-				return err
-			}
-		case "mysql":
-			if err := tx.Table("mysql_databases").Where("database_id = ?", dbID).Delete(nil).Error; err != nil {
-				return err
-			}
-		case "mariadb":
-			if err := tx.Table("mariadb_databases").Where("database_id = ?", dbID).Delete(nil).Error; err != nil {
-				return err
-			}
-		case "mongodb":
-			if err := tx.Table("mongodb_databases").Where("database_id = ?", dbID).Delete(nil).Error; err != nil {
-				return err
-			}
-		}
-
-		// Delete notifier associations
-		if err := tx.Table("database_notifiers").Where("database_id = ?", dbID).Delete(nil).Error; err != nil {
-			return err
-		}
-
-		// Delete the database
-		if err := tx.Table("databases").Where("id = ?", dbID).Delete(nil).Error; err != nil {
-			return err
-		}
-
-		return nil
-	})
-}
+// deleteDatabase is no longer used - replaced with soft delete via DatabaseRepository
+// Kept for reference but should not be called
 
 func (s *ServerService) GetServer(
 	user *users_models.User,

@@ -37,6 +37,15 @@ func GetDatabaseController() *DatabaseController {
 	return databaseController
 }
 
+var databaseCleanupBackgroundService = &DatabaseCleanupBackgroundService{
+	databaseService,
+	logger.GetLogger(),
+}
+
+func GetDatabaseCleanupBackgroundService() *DatabaseCleanupBackgroundService {
+	return databaseCleanupBackgroundService
+}
+
 func SetupDependencies() {
 	workspaces_services.GetWorkspaceService().AddWorkspaceDeletionListener(databaseService)
 }

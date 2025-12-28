@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type Database struct {
@@ -39,7 +40,8 @@ type Database struct {
 	LastBackupTime         *time.Time `json:"lastBackupTime,omitempty"         gorm:"column:last_backup_time;type:timestamp with time zone"`
 	LastBackupErrorMessage *string    `json:"lastBackupErrorMessage,omitempty" gorm:"column:last_backup_error_message;type:text"`
 
-	HealthStatus *HealthStatus `json:"healthStatus" gorm:"column:health_status;type:text;not null"`
+	HealthStatus *HealthStatus    `json:"healthStatus" gorm:"column:health_status;type:text;not null"`
+	DeletedAt    gorm.DeletedAt  `json:"deletedAt,omitempty" gorm:"column:deleted_at;index"`
 }
 
 func (d *Database) Validate() error {

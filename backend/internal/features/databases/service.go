@@ -154,6 +154,8 @@ func (s *DatabaseService) UpdateDatabase(
 	return nil
 }
 
+// DeleteDatabase performs soft delete (moves database to trash)
+// Backup'ы сохраняются, listeners НЕ вызываются
 func (s *DatabaseService) DeleteDatabase(
 	user *users_models.User,
 	id uuid.UUID,
@@ -175,19 +177,113 @@ func (s *DatabaseService) DeleteDatabase(
 		return errors.New("insufficient permissions to delete this database")
 	}
 
-	for _, listener := range s.dbRemoveListener {
-		if err := listener.OnBeforeDatabaseRemove(id); err != nil {
-			return err
-		}
-	}
-
+	// Soft delete - не вызываем listeners, backup'ы сохраняются
 	s.auditLogService.WriteAuditLog(
-		fmt.Sprintf("Database deleted: %s", existingDatabase.Name),
+		fmt.Sprintf("Database moved to trash: %s", existingDatabase.Name),
 		&user.ID,
 		existingDatabase.WorkspaceID,
 	)
 
 	return s.dbRepository.Delete(id)
+}
+
+// PermanentDeleteDatabase performs hard delete (permanently removes database)
+// Backup'ы удаляются, listeners вызываются
+func (s *DatabaseService) PermanentDeleteDatabase(
+	user *users_models.User,
+	id uuid.UUID,
+) error {
+	existingDatabase, err := s.dbRepository.FindByIDUnscoped(id)
+	if err != nil {
+		return err
+	}
+
+	if existingDatabase.WorkspaceID == nil {
+		return errors.New("cannot delete database without workspace")
+	}
+
+	canManage, err := s.workspaceService.CanUserManageDBs(*existingDatabase.WorkspaceID, user)
+	if err != nil {
+		return err
+	}
+	if !canManage {
+		return errors.New("insufficient permissions to permanently delete this database")
+	}
+
+	// Permanent delete - вызываем listeners для удаления backup'ов
+	for _, listener := range s.dbRemoveListener {
+		if err := listener.OnBeforeDatabasePermanentRemove(id); err != nil {
+			return err
+		}
+	}
+
+	s.auditLogService.WriteAuditLog(
+		fmt.Sprintf("Database permanently deleted: %s", existingDatabase.Name),
+		&user.ID,
+		existingDatabase.WorkspaceID,
+	)
+
+	return s.dbRepository.PermanentDelete(id)
+}
+
+// RestoreDatabase restores a soft-deleted database from trash
+func (s *DatabaseService) RestoreDatabase(
+	user *users_models.User,
+	id uuid.UUID,
+) error {
+	existingDatabase, err := s.dbRepository.FindByIDUnscoped(id)
+	if err != nil {
+		return err
+	}
+
+	if existingDatabase.DeletedAt.Time.IsZero() {
+		return errors.New("database is not deleted")
+	}
+
+	if existingDatabase.WorkspaceID == nil {
+		return errors.New("cannot restore database without workspace")
+	}
+
+	canManage, err := s.workspaceService.CanUserManageDBs(*existingDatabase.WorkspaceID, user)
+	if err != nil {
+		return err
+	}
+	if !canManage {
+		return errors.New("insufficient permissions to restore this database")
+	}
+
+	s.auditLogService.WriteAuditLog(
+		fmt.Sprintf("Database restored from trash: %s", existingDatabase.Name),
+		&user.ID,
+		existingDatabase.WorkspaceID,
+	)
+
+	return s.dbRepository.Restore(id)
+}
+
+// GetDeletedDatabases returns all soft-deleted databases in a workspace
+func (s *DatabaseService) GetDeletedDatabases(
+	user *users_models.User,
+	workspaceID uuid.UUID,
+) ([]*Database, error) {
+	canAccess, _, err := s.workspaceService.CanUserAccessWorkspace(workspaceID, user)
+	if err != nil {
+		return nil, err
+	}
+	if !canAccess {
+		return nil, errors.New("insufficient permissions to view deleted databases in this workspace")
+	}
+
+	databases, err := s.dbRepository.FindDeletedByWorkspaceID(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, db := range databases {
+		db.HideSensitiveData()
+	}
+
+	return databases, nil
 }
 
 func (s *DatabaseService) GetDatabase(

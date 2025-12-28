@@ -27,4 +27,5 @@ export interface Database {
   lastBackupErrorMessage?: string;
 
   healthStatus?: HealthStatus;
+  deletedAt?: Date;
 }

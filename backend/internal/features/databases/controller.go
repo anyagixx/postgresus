@@ -39,6 +39,9 @@ func (c *DatabaseController) RegisterRoutes(router *gin.RouterGroup) {
 	router.POST("/databases/is-readonly", c.IsUserReadOnly)
 	router.POST("/databases/create-readonly-user", c.CreateReadOnlyUser)
 	router.POST("/databases/grant-readonly-access", c.GrantReadOnlyAccess)
+	router.POST("/databases/:id/restore", c.RestoreDatabase)
+	router.DELETE("/databases/:id/permanent", c.PermanentDeleteDatabase)
+	router.GET("/databases/deleted", c.GetDeletedDatabases)
 }
 
 // CreateDatabase
@@ -690,4 +693,104 @@ func (c *DatabaseController) GrantReadOnlyAccess(ctx *gin.Context) {
 		FailedDatabases:  failedDatabases,
 		Errors:           errors,
 	})
+}
+
+// RestoreDatabase
+// @Summary Restore a deleted database
+// @Description Restore a soft-deleted database from trash
+// @Tags databases
+// @Param id path string true "Database ID"
+// @Success 204
+// @Failure 400
+// @Failure 401
+// @Failure 500
+// @Router /databases/{id}/restore [post]
+func (c *DatabaseController) RestoreDatabase(ctx *gin.Context) {
+	user, ok := users_middleware.GetUserFromContext(ctx)
+	if !ok {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	id, err := uuid.Parse(ctx.Param("id"))
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid database ID"})
+		return
+	}
+
+	if err := c.databaseService.RestoreDatabase(user, id); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.Status(http.StatusNoContent)
+}
+
+// PermanentDeleteDatabase
+// @Summary Permanently delete a database
+// @Description Permanently delete a database from trash (cannot be undone)
+// @Tags databases
+// @Param id path string true "Database ID"
+// @Success 204
+// @Failure 400
+// @Failure 401
+// @Failure 500
+// @Router /databases/{id}/permanent [delete]
+func (c *DatabaseController) PermanentDeleteDatabase(ctx *gin.Context) {
+	user, ok := users_middleware.GetUserFromContext(ctx)
+	if !ok {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	id, err := uuid.Parse(ctx.Param("id"))
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid database ID"})
+		return
+	}
+
+	if err := c.databaseService.PermanentDeleteDatabase(user, id); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.Status(http.StatusNoContent)
+}
+
+// GetDeletedDatabases
+// @Summary Get deleted databases
+// @Description Get all soft-deleted databases in a workspace (trash)
+// @Tags databases
+// @Param workspaceId query string true "Workspace ID"
+// @Success 200 {array} Database
+// @Failure 400
+// @Failure 401
+// @Failure 500
+// @Router /databases/deleted [get]
+func (c *DatabaseController) GetDeletedDatabases(ctx *gin.Context) {
+	user, ok := users_middleware.GetUserFromContext(ctx)
+	if !ok {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	workspaceIDStr := ctx.Query("workspaceId")
+	if workspaceIDStr == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "workspaceId is required"})
+		return
+	}
+
+	workspaceID, err := uuid.Parse(workspaceIDStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid workspace ID"})
+		return
+	}
+
+	databases, err := c.databaseService.GetDeletedDatabases(user, workspaceID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, databases)
 }

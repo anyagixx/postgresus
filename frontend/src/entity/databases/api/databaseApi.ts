@@ -148,6 +148,31 @@ export const databaseApi = {
       requestOptions,
     );
   },
+
+  async restoreDatabase(id: string) {
+    const requestOptions: RequestOptions = new RequestOptions();
+    return apiHelper.fetchPostRaw(
+      `${getApplicationServer()}/api/v1/databases/${id}/restore`,
+      requestOptions,
+    );
+  },
+
+  async permanentDeleteDatabase(id: string) {
+    const requestOptions: RequestOptions = new RequestOptions();
+    return apiHelper.fetchDeleteRaw(
+      `${getApplicationServer()}/api/v1/databases/${id}/permanent`,
+      requestOptions,
+    );
+  },
+
+  async getDeletedDatabases(workspaceId: string) {
+    const requestOptions: RequestOptions = new RequestOptions();
+    return apiHelper.fetchGetJson<Database[]>(
+      `${getApplicationServer()}/api/v1/databases/deleted?workspaceId=${workspaceId}`,
+      requestOptions,
+      true,
+    );
+  },
 };
 
 export interface ServerConnection {
