@@ -8,8 +8,14 @@ import {
     type DiscoveredDatabase,
     Period,
     type PostgresqlDatabase,
+    type MysqlDatabase,
+    type MariadbDatabase,
+    type MongodbDatabase,
     type ServerConnection,
     databaseApi,
+    MysqlVersion,
+    MariadbVersion,
+    MongodbVersion,
 } from '../../../../entity/databases';
 import { serverApi, type Server } from '../../../../entity/servers';
 import { EditBackupConfigComponent } from '../../../backups';
@@ -43,20 +49,92 @@ export const DiscoveryCreateDatabaseComponent = ({ workspaceId, preselectedServe
     // Backup config state (shared for all databases)
     const [backupConfig, setBackupConfig] = useState<BackupConfig | undefined>();
 
+    // Helper function to create database connection structure based on type
+    const createDatabaseConnectionStructure = (
+        dbType: DatabaseType,
+        connectionData: {
+            host: string;
+            port: number;
+            username: string;
+            password: string;
+            database: string;
+            isHttps: boolean;
+        }
+    ): Partial<Database> => {
+        const baseStructure: Partial<Database> = {
+            postgresql: undefined,
+            mysql: undefined,
+            mariadb: undefined,
+            mongodb: undefined,
+        };
+
+        switch (dbType) {
+            case DatabaseType.MYSQL:
+                baseStructure.mysql = {
+                    id: undefined as unknown as string,
+                    version: MysqlVersion.MysqlVersion80, // Default version, backend will handle actual detection
+                    ...connectionData,
+                } as MysqlDatabase;
+                break;
+            case DatabaseType.MARIADB:
+                baseStructure.mariadb = {
+                    id: undefined as unknown as string,
+                    version: MariadbVersion.MariadbVersion106, // Default version, backend will handle actual detection
+                    ...connectionData,
+                } as MariadbDatabase;
+                break;
+            case DatabaseType.MONGODB:
+                baseStructure.mongodb = {
+                    id: undefined as unknown as string,
+                    version: MongodbVersion.MongodbVersion70, // Default version, backend will handle actual detection
+                    host: connectionData.host,
+                    port: connectionData.port,
+                    username: connectionData.username,
+                    password: connectionData.password,
+                    database: connectionData.database,
+                    authDatabase: 'admin', // Default auth database for MongoDB
+                    useTls: connectionData.isHttps, // MongoDB uses useTls instead of isHttps
+                } as MongodbDatabase;
+                break;
+            case DatabaseType.POSTGRES:
+            default:
+                baseStructure.postgresql = connectionData as PostgresqlDatabase;
+                break;
+        }
+
+        return baseStructure;
+    };
+
     // Create a template database for config components
-    const createTemplateDatabase = (): Database =>
-        ({
+    const createTemplateDatabase = (dbType: DatabaseType = DatabaseType.POSTGRES): Database => {
+        const baseDatabase: Database = {
             id: undefined as unknown as string,
             name: 'Template',
             workspaceId,
             storePeriod: Period.MONTH,
-            postgresql: {} as PostgresqlDatabase,
-            type: DatabaseType.POSTGRES,
+            type: dbType,
             notifiers: [],
             sendNotificationsOn: [],
-        }) as Database;
+            postgresql: undefined,
+            mysql: undefined,
+            mariadb: undefined,
+            mongodb: undefined,
+        } as Database;
 
-    const [templateDatabase, setTemplateDatabase] = useState<Database>(createTemplateDatabase());
+        // Initialize appropriate structure based on type
+        const connectionStructure = createDatabaseConnectionStructure(dbType, {
+            host: '',
+            port: 0,
+            username: '',
+            password: '',
+            database: '',
+            isHttps: false,
+        });
+
+        return { ...baseDatabase, ...connectionStructure } as Database;
+    };
+
+    const [templateDatabase, setTemplateDatabase] = useState<Database>(createTemplateDatabase(DatabaseType.POSTGRES));
 
     // Load preselected server data if serverId is provided
     useEffect(() => {
@@ -81,8 +159,9 @@ export const DiscoveryCreateDatabaseComponent = ({ workspaceId, preselectedServe
         setServerConnection(connection);
         setServerName(name);
         setDiscoveredDatabases(databases);
-        // Update template database type
-        setTemplateDatabase(prev => ({ ...prev, type: dbType }));
+        // Update template database type and structure
+        const newTemplateDatabase = createTemplateDatabase(dbType);
+        setTemplateDatabase(newTemplateDatabase);
         setStep('select-databases');
     };
 
@@ -106,20 +185,30 @@ export const DiscoveryCreateDatabaseComponent = ({ workspaceId, preselectedServe
         setIsCreating(true);
 
         try {
+            // Get database type from databaseWithNotifiers or serverConnection
+            const dbType = databaseWithNotifiers.type || (serverConnection.databaseType as DatabaseType) || DatabaseType.POSTGRES;
+
             // Create database configs for each selected database
             // Use databaseWithNotifiers to ensure we have the latest notifiers from the form
-            const databasesToCreate: Database[] = selectedDatabases.map((db) => ({
-                ...databaseWithNotifiers,
-                name: db.name,
-                postgresql: {
+            const databasesToCreate: Database[] = selectedDatabases.map((db) => {
+                const connectionData = {
                     host: serverConnection.host,
                     port: serverConnection.port,
                     username: serverConnection.username,
                     password: serverConnection.password,
                     database: db.name,
                     isHttps: serverConnection.isHttps,
-                } as PostgresqlDatabase,
-            }));
+                };
+
+                const connectionStructure = createDatabaseConnectionStructure(dbType, connectionData);
+
+                return {
+                    ...databaseWithNotifiers,
+                    name: db.name,
+                    type: dbType,
+                    ...connectionStructure,
+                } as Database;
+            });
 
             // Batch create all databases with server info
             console.log('DEBUG createDatabaseBatch:', { serverConnection, serverName, workspaceId });
