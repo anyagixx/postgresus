@@ -151,6 +151,7 @@ export const databaseApi = {
 };
 
 export interface ServerConnection {
+  databaseType?: string; // POSTGRES, MYSQL, MARIADB, MONGODB
   host: string;
   port: number;
   username: string;

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"postgresus-backend/internal/features/databases/databases/mysql"
 	"postgresus-backend/internal/features/databases/databases/postgresql"
 	users_middleware "postgresus-backend/internal/features/users/middleware"
 	users_services "postgresus-backend/internal/features/users/services"
@@ -412,14 +413,24 @@ func (c *DatabaseController) CreateReadOnlyUser(ctx *gin.Context) {
 	})
 }
 
+// DiscoveryRequest contains server connection parameters for database discovery
+type DiscoveryRequest struct {
+	DatabaseType string `json:"databaseType" binding:"required"` // POSTGRES, MYSQL, MARIADB, MONGODB
+	Host         string `json:"host"         binding:"required"`
+	Port         int    `json:"port"         binding:"required"`
+	Username     string `json:"username"     binding:"required"`
+	Password     string `json:"password"     binding:"required"`
+	IsHttps      bool   `json:"isHttps"`
+}
+
 // DiscoverDatabases
 // @Summary Discover databases on a server
-// @Description Connect to a PostgreSQL server and list all available databases
+// @Description Connect to a database server and list all available databases
 // @Tags databases
 // @Accept json
 // @Produce json
-// @Param request body postgresql.DiscoveryRequest true "Server connection data"
-// @Success 200 {array} postgresql.DatabaseInfo
+// @Param request body DiscoveryRequest true "Server connection data with database type"
+// @Success 200 {object} map[string]interface{} "Response contains 'databases' array"
 // @Failure 400
 // @Failure 401
 // @Router /databases/discover [post]
@@ -430,13 +441,39 @@ func (c *DatabaseController) DiscoverDatabases(ctx *gin.Context) {
 		return
 	}
 
-	var request postgresql.DiscoveryRequest
+	var request DiscoveryRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	databases, err := postgresql.ListDatabasesOnServer(request)
+	var databases interface{}
+	var err error
+
+	switch DatabaseType(request.DatabaseType) {
+	case DatabaseTypePostgres:
+		pgReq := postgresql.DiscoveryRequest{
+			Host:     request.Host,
+			Port:     request.Port,
+			Username: request.Username,
+			Password: request.Password,
+			IsHttps:  request.IsHttps,
+		}
+		databases, err = postgresql.ListDatabasesOnServer(pgReq)
+	case DatabaseTypeMysql:
+		mysqlReq := mysql.DiscoveryRequest{
+			Host:     request.Host,
+			Port:     request.Port,
+			Username: request.Username,
+			Password: request.Password,
+			IsHttps:  request.IsHttps,
+		}
+		databases, err = mysql.ListDatabasesOnServer(mysqlReq)
+	default:
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "unsupported database type: " + request.DatabaseType})
+		return
+	}
+
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

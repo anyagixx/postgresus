@@ -43,6 +43,7 @@ export const ServerConnectionComponent = ({ preselectedServer, preselectedServer
     const [serverName, setServerName] = useState(preselectedServerName || ''); // User-friendly name like "Production Server"
     const [databaseType, setDatabaseType] = useState<DatabaseType>(initialDatabaseType);
     const [serverConnection, setServerConnection] = useState<ServerConnection>({
+        databaseType: initialDatabaseType,
         host: preselectedServer?.host || '',
         port: preselectedServer?.port || defaultPorts[initialDatabaseType],
         username: '', // Username should be entered by user, not prefilled
@@ -56,6 +57,7 @@ export const ServerConnectionComponent = ({ preselectedServer, preselectedServer
             const dbType = serverTypeToDatabaseType(preselectedServer.type);
             setDatabaseType(dbType);
             setServerConnection({
+                databaseType: dbType,
                 host: preselectedServer.host,
                 port: preselectedServer.port,
                 username: '', // Username should be entered by user, not prefilled
@@ -96,6 +98,7 @@ export const ServerConnectionComponent = ({ preselectedServer, preselectedServer
             }
 
             setServerConnection({
+                databaseType: databaseType,
                 host: result.host,
                 port: result.port,
                 username: result.username,
@@ -114,10 +117,15 @@ export const ServerConnectionComponent = ({ preselectedServer, preselectedServer
         setConnectionError(null);
 
         try {
-            const response = await databaseApi.discoverDatabases(serverConnection);
+            // Ensure databaseType is set in serverConnection
+            const connectionWithType = {
+                ...serverConnection,
+                databaseType: databaseType,
+            };
+            const response = await databaseApi.discoverDatabases(connectionWithType);
             // Use preselectedServerName if available, otherwise use entered serverName
             const finalServerName = preselectedServerName || serverName;
-            onConnected(serverConnection, response.databases, finalServerName, databaseType);
+            onConnected(connectionWithType, response.databases, finalServerName, databaseType);
         } catch (e) {
             setConnectionError((e as Error).message);
         }
@@ -174,14 +182,14 @@ export const ServerConnectionComponent = ({ preselectedServer, preselectedServer
                         value={databaseType}
                         onChange={(value) => {
                             setDatabaseType(value);
-                            // Update default port based on type
+                            // Update default port and databaseType based on type
                             const defaultPorts: Record<DatabaseType, number> = {
                                 [DatabaseType.POSTGRES]: 5432,
                                 [DatabaseType.MYSQL]: 3306,
                                 [DatabaseType.MARIADB]: 3306,
                                 [DatabaseType.MONGODB]: 27017,
                             };
-                            setServerConnection(prev => ({ ...prev, port: defaultPorts[value] }));
+                            setServerConnection(prev => ({ ...prev, databaseType: value, port: defaultPorts[value] }));
                             setConnectionError(null);
                         }}
                         options={databaseTypeOptions}
