@@ -242,14 +242,14 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
     });
   }, [workspace.id]);
 
-  // Get host:port from first database in group
+  // Get host from first database in group
   const getServerAddress = (databases: Database[]): string | null => {
     const firstDb = databases[0];
     if (!firstDb) return null;
 
     const dbConfig = firstDb.postgresql || firstDb.mysql || firstDb.mariadb || firstDb.mongodb;
-    if (dbConfig && 'host' in dbConfig && 'port' in dbConfig) {
-      return `${dbConfig.host}:${dbConfig.port}`;
+    if (dbConfig && 'host' in dbConfig) {
+      return dbConfig.host;
     }
     return null;
   };
