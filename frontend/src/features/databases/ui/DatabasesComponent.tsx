@@ -7,7 +7,6 @@ import type { Database } from '../../../entity/databases';
 import { serverApi, type DeleteServerOption } from '../../../entity/servers';
 import type { WorkspaceResponse } from '../../../entity/workspaces';
 import { useIsMobile } from '../../../shared/hooks';
-import { CreateDatabaseComponent } from './CreateDatabaseComponent';
 import { DiscoveryCreateDatabaseComponent } from './create/DiscoveryCreateDatabaseComponent';
 import { DatabaseCardComponent } from './DatabaseCardComponent';
 import { DatabaseComponent } from './DatabaseComponent';
@@ -28,7 +27,6 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
   const [databases, setDatabases] = useState<Database[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const [isShowAddDatabase, setIsShowAddDatabase] = useState(false);
   const [isShowDiscovery, setIsShowDiscovery] = useState(false);
   const [preselectedServerId, setPreselectedServerId] = useState<string | null>(null);
   const [selectedDatabaseId, setSelectedDatabaseId] = useState<string | undefined>(undefined);
@@ -302,6 +300,15 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
     return () => clearInterval(interval);
   }, []);
 
+  // More frequent update interval for healthcheck status (60 seconds)
+  useEffect(() => {
+    const healthcheckInterval = setInterval(() => {
+      loadDatabases(true);
+    }, 60_000);
+
+    return () => clearInterval(healthcheckInterval);
+  }, []);
+
   if (isLoading) {
     return (
       <div className="mx-3 my-3 flex w-[250px] justify-center">
@@ -311,19 +318,16 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
   }
 
   const addDatabaseButton = (
-    <div className="mb-2 flex gap-2">
+    <div className="mb-2">
       <Button
         type="primary"
-        className="flex-1"
+        className="w-full"
         onClick={() => {
           setPreselectedServerId(null);
           setIsShowDiscovery(true);
         }}
       >
         Discover & Add
-      </Button>
-      <Button type="default" className="flex-1" onClick={() => setIsShowAddDatabase(true)}>
-        Add Manually
       </Button>
     </div>
   );
@@ -344,20 +348,16 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
             className="w-full overflow-y-auto md:mx-3 md:w-[250px] md:min-w-[250px] md:pr-2"
             style={{ height: contentHeight }}
           >
-            {databases.length >= 5 && (
-              <>
-                {isCanManageDBs && addDatabaseButton}
+            {isCanManageDBs && addDatabaseButton}
 
-                <div className="mb-2">
-                  <input
-                    placeholder="Search database"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full border-b border-gray-300 p-1 text-gray-500 outline-none dark:text-gray-400"
-                  />
-                </div>
-              </>
-            )}
+            <div className="mb-2">
+              <input
+                placeholder="Search database"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full border-b border-gray-300 p-1 text-gray-500 outline-none dark:text-gray-400"
+              />
+            </div>
 
             {/* Collapse All / Expand All button */}
             {filteredDatabases.length > 0 && Object.keys(
@@ -629,8 +629,6 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                 </div>
               )}
 
-            {databases.length < 5 && isCanManageDBs && addDatabaseButton}
-
             <div className="mx-3 text-center text-xs text-gray-500 dark:text-gray-400">
               Database - is a thing we are backing up
             </div>
@@ -670,28 +668,6 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
           </div>
         )}
       </div>
-
-      {isShowAddDatabase && (
-        <Modal
-          title="Add database for backup"
-          footer={<div />}
-          open={isShowAddDatabase}
-          onCancel={() => setIsShowAddDatabase(false)}
-          maskClosable={false}
-          width={420}
-        >
-          <div className="mt-5" />
-
-          <CreateDatabaseComponent
-            workspaceId={workspace.id}
-            onCreated={(databaseId) => {
-              loadDatabases(false, databaseId);
-              setIsShowAddDatabase(false);
-            }}
-            onClose={() => setIsShowAddDatabase(false)}
-          />
-        </Modal>
-      )}
 
       {isShowDiscovery && (
         <Modal
