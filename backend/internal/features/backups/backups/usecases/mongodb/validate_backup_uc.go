@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"time"
 
 	"postgresus-backend/internal/config"
@@ -19,10 +18,7 @@ import (
 	encryption_secrets "postgresus-backend/internal/features/encryption/secrets"
 	"postgresus-backend/internal/features/storages"
 	util_encryption "postgresus-backend/internal/util/encryption"
-	files_utils "postgresus-backend/internal/util/files"
 	"postgresus-backend/internal/util/tools"
-
-	"github.com/google/uuid"
 )
 
 type ValidateMongodbBackupUsecase struct {
@@ -58,15 +54,33 @@ func (uc *ValidateMongodbBackupUsecase) Execute(
 		}, nil
 	}
 
-	// Download backup to temporary file
-	tempFile, cleanupFunc, err := uc.downloadBackupToTempFile(ctx, backup, storage)
+	// Get backup data from storage
+	fieldEncryptor := util_encryption.GetFieldEncryptor()
+	rawReader, err := storage.GetFile(fieldEncryptor, backup.ID)
 	if err != nil {
 		return &ValidationResult{
 			IsValid: false,
-			Error:   stringPtr(fmt.Sprintf("failed to download backup: %v", err)),
+			Error:   stringPtr(fmt.Sprintf("failed to get backup file from storage: %v", err)),
 		}, nil
 	}
-	defer cleanupFunc()
+	defer func() {
+		if err := rawReader.Close(); err != nil {
+			uc.logger.Error("Failed to close backup reader", "error", err)
+		}
+	}()
+
+	// Create a reader that handles decryption if needed
+	var backupReader io.Reader = rawReader
+	if backup.Encryption == backups_config.BackupEncryptionEncrypted {
+		decryptReader, err := uc.setupDecryption(rawReader, backup)
+		if err != nil {
+			return &ValidationResult{
+				IsValid: false,
+				Error:   stringPtr(fmt.Sprintf("failed to setup decryption: %v", err)),
+			}, nil
+		}
+		backupReader = decryptReader
+	}
 
 	// Use mongorestore --dryRun to validate archive
 	mongorestoreBin := tools.GetMongodbExecutable(
@@ -75,21 +89,48 @@ func (uc *ValidateMongodbBackupUsecase) Execute(
 		config.GetEnv().MongodbInstallDir,
 	)
 
-	// Run mongorestore --dryRun to validate the archive
+	// Run mongorestore --dryRun with stdin input (like restore does)
 	cmd := exec.CommandContext(
 		ctx,
 		mongorestoreBin,
-		"--archive="+tempFile,
+		"--archive",
 		"--gzip",
 		"--dryRun",
 		"--quiet",
 	)
 
-	output, err := cmd.CombinedOutput()
+	cmd.Stdin = backupReader
+	cmd.Env = os.Environ()
+	cmd.Env = append(cmd.Env, "LC_ALL=C.UTF-8", "LANG=C.UTF-8")
+
+	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
-		errorMsg := string(output)
+		return &ValidationResult{
+			IsValid: false,
+			Error:   stringPtr(fmt.Sprintf("failed to create stderr pipe: %v", err)),
+		}, nil
+	}
+
+	stderrCh := make(chan []byte, 1)
+	go func() {
+		output, _ := io.ReadAll(stderrPipe)
+		stderrCh <- output
+	}()
+
+	if err = cmd.Start(); err != nil {
+		return &ValidationResult{
+			IsValid: false,
+			Error:   stringPtr(fmt.Sprintf("failed to start mongorestore: %v", err)),
+		}, nil
+	}
+
+	waitErr := cmd.Wait()
+	stderrOutput := <-stderrCh
+
+	if waitErr != nil {
+		errorMsg := string(stderrOutput)
 		if errorMsg == "" {
-			errorMsg = err.Error()
+			errorMsg = waitErr.Error()
 		}
 		return &ValidationResult{
 			IsValid: false,
@@ -103,81 +144,6 @@ func (uc *ValidateMongodbBackupUsecase) Execute(
 		Details:     stringPtr("MongoDB backup archive is valid"),
 		ValidatedAt: time.Now().UTC(),
 	}, nil
-}
-
-// downloadBackupToTempFile downloads backup data from storage to a temporary file
-func (uc *ValidateMongodbBackupUsecase) downloadBackupToTempFile(
-	ctx context.Context,
-	backup *usecases_common.BackupInfo,
-	storage *storages.Storage,
-) (string, func(), error) {
-	err := files_utils.EnsureDirectories([]string{
-		config.GetEnv().TempFolder,
-	})
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to ensure directories: %w", err)
-	}
-
-	tempDir, err := os.MkdirTemp(config.GetEnv().TempFolder, "validate_"+uuid.New().String())
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to create temporary directory: %w", err)
-	}
-
-	cleanupFunc := func() {
-		_ = os.RemoveAll(tempDir)
-	}
-
-	tempBackupFile := filepath.Join(tempDir, "backup.archive.gz")
-
-	uc.logger.Info(
-		"Downloading backup file from storage to temporary file",
-		"backupId", backup.ID,
-		"tempFile", tempBackupFile,
-		"encrypted", backup.Encryption == backups_config.BackupEncryptionEncrypted,
-	)
-
-	fieldEncryptor := util_encryption.GetFieldEncryptor()
-	rawReader, err := storage.GetFile(fieldEncryptor, backup.ID)
-	if err != nil {
-		cleanupFunc()
-		return "", nil, fmt.Errorf("failed to get backup file from storage: %w", err)
-	}
-	defer func() {
-		if err := rawReader.Close(); err != nil {
-			uc.logger.Error("Failed to close backup reader", "error", err)
-		}
-	}()
-
-	// Create a reader that handles decryption if needed
-	var backupReader io.Reader = rawReader
-	if backup.Encryption == backups_config.BackupEncryptionEncrypted {
-		decryptReader, err := uc.setupDecryption(rawReader, backup)
-		if err != nil {
-			cleanupFunc()
-			return "", nil, fmt.Errorf("failed to setup decryption: %w", err)
-		}
-		backupReader = decryptReader
-	}
-
-	tempFile, err := os.Create(tempBackupFile)
-	if err != nil {
-		cleanupFunc()
-		return "", nil, fmt.Errorf("failed to create temporary backup file: %w", err)
-	}
-	defer func() {
-		if err := tempFile.Close(); err != nil {
-			uc.logger.Error("Failed to close temporary file", "error", err)
-		}
-	}()
-
-	_, err = io.Copy(tempFile, backupReader)
-	if err != nil {
-		cleanupFunc()
-		return "", nil, fmt.Errorf("failed to write backup to temporary file: %w", err)
-	}
-
-	uc.logger.Info("Backup file written to temporary location", "tempFile", tempBackupFile)
-	return tempBackupFile, cleanupFunc, nil
 }
 
 func (uc *ValidateMongodbBackupUsecase) setupDecryption(
