@@ -163,14 +163,21 @@ export const RestoresComponent = ({ database, backup, workspaceId }: Props) => {
   };
 
   const handleRestoreToCurrent = async () => {
+    if (!restoreUsername || !restorePassword) return;
+
     try {
       // Restore to current database (targetDatabaseId = database.id)
       await restoreApi.restoreBackup({
         backupId: backup.id,
         targetDatabaseId: database.id,
+        restoreUsername: restoreUsername,
+        restorePassword: restorePassword,
       });
       await loadRestores();
       setIsShowRestore(false);
+      // Clear credentials after successful restore
+      setRestoreUsername('');
+      setRestorePassword('');
     } catch (e) {
       alert((e as Error).message);
     }
@@ -193,6 +200,10 @@ export const RestoresComponent = ({ database, backup, workspaceId }: Props) => {
       setEditingDatabase(createEmptyDatabaseForManualRestore(database));
       // Load databases for option 2 (same-server restore)
       loadWorkspaceDatabases();
+      // Clear credentials when modal opens
+      setRestoreUsername('');
+      setRestorePassword('');
+      setSelectedDatabaseId(undefined);
     }
   }, [isShowRestore, database, loadWorkspaceDatabases]);
 
@@ -240,13 +251,45 @@ export const RestoresComponent = ({ database, backup, workspaceId }: Props) => {
           <div className="mb-3 text-sm text-gray-600 dark:text-gray-400">
             Database: <strong>{database.name}</strong>
           </div>
-          <Button 
-            type="primary" 
-            onClick={handleRestoreToCurrent}
-            disabled={isRestoreInProgress}
-          >
-            Restore to current database
-          </Button>
+
+          <div className="mb-4 p-3 rounded border border-yellow-300 bg-yellow-50 text-sm dark:border-yellow-600 dark:bg-yellow-900/30">
+            <strong>⚠️ Warning:</strong> This will OVERWRITE all data in database "{database.name}"
+          </div>
+
+          <div className="mb-4 p-3 rounded border border-blue-300 bg-blue-50 text-sm dark:border-blue-600 dark:bg-blue-900/30">
+            <strong>ℹ️ Note:</strong> Restore requires a user with <strong>full privileges</strong> (database owner or superuser).
+            The read-only backup user cannot perform restore operations.
+          </div>
+
+          <div className="mb-4 space-y-3">
+            <div>
+              <div className="mb-1 text-sm font-medium">Username (with full privileges):</div>
+              <Input
+                placeholder="e.g. postgres or db_owner"
+                value={restoreUsername}
+                onChange={(e) => setRestoreUsername(e.target.value)}
+              />
+            </div>
+            <div>
+              <div className="mb-1 text-sm font-medium">Password:</div>
+              <Input.Password
+                placeholder="Password"
+                value={restorePassword}
+                onChange={(e) => setRestorePassword(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button onClick={() => setIsShowRestore(false)}>Cancel</Button>
+            <Button
+              type="primary"
+              onClick={handleRestoreToCurrent}
+              disabled={isRestoreInProgress || !restoreUsername || !restorePassword}
+            >
+              Restore to current database
+            </Button>
+          </div>
         </div>
 
         {/* Option 2: Restore to another database on the same server */}
