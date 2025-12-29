@@ -695,3 +695,128 @@ func (s *DatabaseService) CreateReadOnlyUser(
 
 	return username, password, nil
 }
+
+func (s *DatabaseService) GetDeletedDatabases(
+	user *users_models.User,
+	workspaceID uuid.UUID,
+) ([]*Database, error) {
+	canAccess, _, err := s.workspaceService.CanUserAccessWorkspace(workspaceID, user)
+	if err != nil {
+		return nil, err
+	}
+	if !canAccess {
+		return nil, errors.New("insufficient permissions to access this workspace")
+	}
+
+	databases, err := s.dbRepository.FindDeletedByWorkspaceID(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, database := range databases {
+		database.HideSensitiveData()
+	}
+
+	return databases, nil
+}
+
+func (s *DatabaseService) RestoreDatabase(
+	user *users_models.User,
+	id uuid.UUID,
+) error {
+	existingDatabase, err := s.dbRepository.FindByID(id)
+	if err != nil {
+		return err
+	}
+
+	if existingDatabase.WorkspaceID == nil {
+		return errors.New("cannot restore database without workspace")
+	}
+
+	if existingDatabase.DeletedAt == nil {
+		return errors.New("database is not deleted")
+	}
+
+	canManage, err := s.workspaceService.CanUserManageDBs(*existingDatabase.WorkspaceID, user)
+	if err != nil {
+		return err
+	}
+	if !canManage {
+		return errors.New("insufficient permissions to restore this database")
+	}
+
+	s.auditLogService.WriteAuditLog(
+		fmt.Sprintf("Database restored from trash: %s", existingDatabase.Name),
+		&user.ID,
+		existingDatabase.WorkspaceID,
+	)
+
+	return s.dbRepository.Restore(id)
+}
+
+func (s *DatabaseService) PermanentDeleteDatabase(
+	user *users_models.User,
+	id uuid.UUID,
+) error {
+	existingDatabase, err := s.dbRepository.FindByID(id)
+	if err != nil {
+		return err
+	}
+
+	if existingDatabase.WorkspaceID == nil {
+		return errors.New("cannot permanently delete database without workspace")
+	}
+
+	if existingDatabase.DeletedAt == nil {
+		return errors.New("database must be in trash before permanent deletion")
+	}
+
+	canManage, err := s.workspaceService.CanUserManageDBs(*existingDatabase.WorkspaceID, user)
+	if err != nil {
+		return err
+	}
+	if !canManage {
+		return errors.New("insufficient permissions to permanently delete this database")
+	}
+
+	for _, listener := range s.dbRemoveListener {
+		if err := listener.OnBeforeDatabaseRemove(id); err != nil {
+			return err
+		}
+	}
+
+	s.auditLogService.WriteAuditLog(
+		fmt.Sprintf("Database permanently deleted: %s", existingDatabase.Name),
+		&user.ID,
+		existingDatabase.WorkspaceID,
+	)
+
+	return s.dbRepository.PermanentDelete(id)
+}
+
+func (s *DatabaseService) CleanupOldDeletedDatabases(days int) (int, error) {
+	databases, err := s.dbRepository.FindDeletedOlderThan(days)
+	if err != nil {
+		return 0, err
+	}
+
+	deletedCount := 0
+	for _, database := range databases {
+		if err := s.dbRepository.PermanentDelete(database.ID); err != nil {
+			s.logger.Error("Failed to permanently delete old database",
+				"database_id", database.ID,
+				"database_name", database.Name,
+				"error", err,
+			)
+			continue
+		}
+
+		s.logger.Info("Auto-deleted old database from trash",
+			"database_id", database.ID,
+			"database_name", database.Name,
+		)
+		deletedCount++
+	}
+
+	return deletedCount, nil
+}

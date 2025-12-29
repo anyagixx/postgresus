@@ -301,6 +301,10 @@ func runBackgroundTasks(log *slog.Logger) {
 	go runWithPanicLogging(log, "healthcheck attempt background service", func() {
 		healthcheck_attempt.GetHealthcheckAttemptBackgroundService().Run()
 	})
+
+	go runWithPanicLogging(log, "database cleanup service", func() {
+		databases.GetCleanupService().Run()
+	})
 }
 
 func runWithPanicLogging(log *slog.Logger, serviceName string, fn func()) {

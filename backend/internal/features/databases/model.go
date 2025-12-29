@@ -40,6 +40,9 @@ type Database struct {
 	LastBackupErrorMessage *string    `json:"lastBackupErrorMessage,omitempty" gorm:"column:last_backup_error_message;type:text"`
 
 	HealthStatus *HealthStatus `json:"healthStatus" gorm:"column:health_status;type:text;not null"`
+
+	// Soft delete support
+	DeletedAt *time.Time `json:"deletedAt,omitempty" gorm:"column:deleted_at;type:timestamp with time zone"`
 }
 
 func (d *Database) Validate() error {

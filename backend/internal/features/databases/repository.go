@@ -7,6 +7,7 @@ import (
 	"postgresus-backend/internal/features/databases/databases/mysql"
 	"postgresus-backend/internal/features/databases/databases/postgresql"
 	"postgresus-backend/internal/storage"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -162,7 +163,7 @@ func (r *DatabaseRepository) FindByWorkspaceID(workspaceID uuid.UUID) ([]*Databa
 		Preload("Mariadb").
 		Preload("Mongodb").
 		Preload("Notifiers").
-		Where("databases.workspace_id = ?", workspaceID).
+		Where("databases.workspace_id = ? AND databases.deleted_at IS NULL", workspaceID).
 		Order("CASE WHEN databases.health_status = 'UNAVAILABLE' THEN 1 WHEN databases.health_status = 'AVAILABLE' THEN 2 WHEN databases.health_status IS NULL THEN 3 ELSE 4 END, servers.name ASC NULLS LAST, databases.name ASC").
 		Find(&databases).Error; err != nil {
 		return nil, err
@@ -172,6 +173,43 @@ func (r *DatabaseRepository) FindByWorkspaceID(workspaceID uuid.UUID) ([]*Databa
 }
 
 func (r *DatabaseRepository) Delete(id uuid.UUID) error {
+	now := time.Now().UTC()
+	return storage.GetDb().
+		Model(&Database{}).
+		Where("id = ?", id).
+		Update("deleted_at", now).Error
+}
+
+func (r *DatabaseRepository) FindDeletedByWorkspaceID(workspaceID uuid.UUID) ([]*Database, error) {
+	var databases []*Database
+
+	if err := storage.
+		GetDb().
+		Table("databases").
+		Select("databases.*, servers.name as server_name").
+		Joins("LEFT JOIN servers ON databases.server_id = servers.id").
+		Preload("Postgresql").
+		Preload("Mysql").
+		Preload("Mariadb").
+		Preload("Mongodb").
+		Preload("Notifiers").
+		Where("databases.workspace_id = ? AND databases.deleted_at IS NOT NULL", workspaceID).
+		Order("databases.deleted_at DESC").
+		Find(&databases).Error; err != nil {
+		return nil, err
+	}
+
+	return databases, nil
+}
+
+func (r *DatabaseRepository) Restore(id uuid.UUID) error {
+	return storage.GetDb().
+		Model(&Database{}).
+		Where("id = ?", id).
+		Update("deleted_at", nil).Error
+}
+
+func (r *DatabaseRepository) PermanentDelete(id uuid.UUID) error {
 	db := storage.GetDb()
 
 	return db.Transaction(func(tx *gorm.DB) error {
@@ -219,6 +257,20 @@ func (r *DatabaseRepository) Delete(id uuid.UUID) error {
 	})
 }
 
+func (r *DatabaseRepository) FindDeletedOlderThan(days int) ([]*Database, error) {
+	var databases []*Database
+	cutoff := time.Now().UTC().AddDate(0, 0, -days)
+
+	if err := storage.
+		GetDb().
+		Where("deleted_at IS NOT NULL AND deleted_at < ?", cutoff).
+		Find(&databases).Error; err != nil {
+		return nil, err
+	}
+
+	return databases, nil
+}
+
 func (r *DatabaseRepository) IsNotifierUsing(notifierID uuid.UUID) (bool, error) {
 	var count int64
 
@@ -246,6 +298,7 @@ func (r *DatabaseRepository) GetAllDatabases() ([]*Database, error) {
 		Preload("Mariadb").
 		Preload("Mongodb").
 		Preload("Notifiers").
+		Where("databases.deleted_at IS NULL").
 		Order("servers.name ASC NULLS LAST, databases.name ASC").
 		Find(&databases).Error; err != nil {
 		return nil, err

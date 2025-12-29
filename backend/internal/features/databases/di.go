@@ -31,12 +31,21 @@ var databaseController = &DatabaseController{
 	servers.GetServerService(),
 }
 
+var cleanupService = &CleanupService{
+	databaseService,
+	logger.GetLogger(),
+}
+
 func GetDatabaseService() *DatabaseService {
 	return databaseService
 }
 
 func GetDatabaseController() *DatabaseController {
 	return databaseController
+}
+
+func GetCleanupService() *CleanupService {
+	return cleanupService
 }
 
 func SetupDependencies() {

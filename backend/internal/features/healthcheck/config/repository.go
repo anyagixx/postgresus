@@ -25,7 +25,9 @@ func (r *HealthcheckConfigRepository) GetDatabasesWithEnabledHealthcheck() (
 
 	if err := storage.
 		GetDb().
-		Where("healthcheck_configs.is_healthcheck_enabled = ?", true).
+		Table("healthcheck_configs").
+		Joins("INNER JOIN databases ON databases.id = healthcheck_configs.database_id").
+		Where("healthcheck_configs.is_healthcheck_enabled = ? AND databases.deleted_at IS NULL", true).
 		Find(&configs).Error; err != nil {
 		return nil, err
 	}

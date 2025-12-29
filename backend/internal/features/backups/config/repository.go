@@ -79,9 +79,11 @@ func (r *BackupConfigRepository) GetWithEnabledBackups() ([]*BackupConfig, error
 
 	if err := storage.
 		GetDb().
+		Table("backup_configs").
+		Joins("INNER JOIN databases ON databases.id = backup_configs.database_id").
+		Where("backup_configs.is_backups_enabled = ? AND databases.deleted_at IS NULL", true).
 		Preload("BackupInterval").
 		Preload("Storage").
-		Where("is_backups_enabled = ?", true).
 		Find(&backupConfigs).Error; err != nil {
 		return nil, err
 	}
