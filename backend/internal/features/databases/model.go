@@ -159,12 +159,24 @@ func (d *Database) Update(incoming *Database) {
 func (d *Database) getSpecificDatabase() DatabaseConnector {
 	switch d.Type {
 	case DatabaseTypePostgres:
+		if d.Postgresql == nil {
+			panic("postgresql configuration is missing for PostgreSQL database")
+		}
 		return d.Postgresql
 	case DatabaseTypeMysql:
+		if d.Mysql == nil {
+			panic("mysql configuration is missing for MySQL database")
+		}
 		return d.Mysql
 	case DatabaseTypeMariadb:
+		if d.Mariadb == nil {
+			panic("mariadb configuration is missing for MariaDB database")
+		}
 		return d.Mariadb
 	case DatabaseTypeMongodb:
+		if d.Mongodb == nil {
+			panic("mongodb configuration is missing for MongoDB database")
+		}
 		return d.Mongodb
 	}
 

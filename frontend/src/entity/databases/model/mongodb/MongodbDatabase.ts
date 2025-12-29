@@ -9,5 +9,5 @@ export interface MongodbDatabase {
   password: string;
   database: string;
   authDatabase: string;
-  useTls: boolean;
+  isHttps: boolean; // Changed from useTls to isHttps to match backend
 }

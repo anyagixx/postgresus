@@ -34,7 +34,7 @@ export const ShowMongoDbSpecificDataComponent = ({ database }: Props) => {
 
       <div className="mb-1 flex w-full items-center">
         <div className="min-w-[150px]">Use TLS</div>
-        <div>{database.mongodb?.useTls ? 'Yes' : 'No'}</div>
+        <div>{database.mongodb?.isHttps ? 'Yes' : 'No'}</div>
       </div>
 
       {database.mongodb?.authDatabase && (
