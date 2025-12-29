@@ -10,7 +10,7 @@ import {
   SafetyCertificateOutlined,
   SyncOutlined,
 } from '@ant-design/icons';
-import { Button, Modal, Spin, Table, Tooltip } from 'antd';
+import { App, Button, Modal, Spin, Table, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { useEffect, useRef, useState } from 'react';
@@ -39,6 +39,7 @@ interface Props {
 }
 
 export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef, workspaceId }: Props) => {
+  const { message } = App.useApp();
   const [isBackupsLoading, setIsBackupsLoading] = useState(false);
   const [backups, setBackups] = useState<Backup[]>([]);
 
@@ -65,7 +66,13 @@ export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef,
   const [downloadingBackupId, setDownloadingBackupId] = useState<string | undefined>();
   const [cancellingBackupId, setCancellingBackupId] = useState<string | undefined>();
   const [validatingBackupId, setValidatingBackupId] = useState<string | undefined>();
-  const [isBackupAllLoading, setIsBackupAllLoading] = useState(false);
+  const [isBackupAllServerLoading, setIsBackupAllServerLoading] = useState(false);
+  const [isBackupAllWorkspaceLoading, setIsBackupAllWorkspaceLoading] = useState(false);
+  const [showBackupAllServerConfirm, setShowBackupAllServerConfirm] = useState(false);
+  const [showBackupAllWorkspaceConfirm, setShowBackupAllWorkspaceConfirm] = useState(false);
+  const [backupAllServerCount, setBackupAllServerCount] = useState(0);
+  const [backupAllWorkspaceCount, setBackupAllWorkspaceCount] = useState(0);
+  const [backupAllServerName, setBackupAllServerName] = useState<string>('');
 
   const downloadBackup = async (backupId: string) => {
     try {
@@ -194,22 +201,47 @@ export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef,
     setIsMakeBackupRequestLoading(false);
   };
 
-  const backupAll = async () => {
-    if (!workspaceId) return;
+  const backupAllServer = async () => {
+    if (!workspaceId || !database.serverId) return;
 
-    setIsBackupAllLoading(true);
+    setIsBackupAllServerLoading(true);
 
     try {
       // Get all databases in workspace
       const allDatabases = await databaseApi.getDatabases(workspaceId);
 
-      // Start backup for each database
-      for (const db of allDatabases) {
+      // Filter databases by serverId (exclude current database)
+      const serverDatabases = allDatabases.filter(
+        (db) => db.serverId === database.serverId && db.id !== database.id,
+      );
+
+      if (serverDatabases.length === 0) {
+        message.info('No other databases found on this server');
+        setIsBackupAllServerLoading(false);
+        return;
+      }
+
+      // Start backup for each database on the server
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const db of serverDatabases) {
         try {
           await backupsApi.makeBackup(db.id);
+          successCount++;
         } catch (e) {
           console.error(`Failed to backup database ${db.name}:`, e);
+          failCount++;
         }
+      }
+
+      // Show notification
+      if (failCount === 0) {
+        message.success(`Started backup for ${successCount} database(s) on server`);
+      } else {
+        message.warning(
+          `Started backup for ${successCount} database(s), ${failCount} failed. Check console for details.`,
+        );
       }
 
       // Reload current database backups after a delay
@@ -221,7 +253,103 @@ export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef,
       alert((e as Error).message);
     }
 
-    setIsBackupAllLoading(false);
+    setIsBackupAllServerLoading(false);
+  };
+
+  const backupAllWorkspace = async () => {
+    if (!workspaceId) return;
+
+    setIsBackupAllWorkspaceLoading(true);
+
+    try {
+      // Get all databases in workspace
+      const allDatabases = await databaseApi.getDatabases(workspaceId);
+
+      // Exclude current database
+      const workspaceDatabases = allDatabases.filter((db) => db.id !== database.id);
+
+      if (workspaceDatabases.length === 0) {
+        message.info('No other databases found in workspace');
+        setIsBackupAllWorkspaceLoading(false);
+        return;
+      }
+
+      // Start backup for each database in workspace
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const db of workspaceDatabases) {
+        try {
+          await backupsApi.makeBackup(db.id);
+          successCount++;
+        } catch (e) {
+          console.error(`Failed to backup database ${db.name}:`, e);
+          failCount++;
+        }
+      }
+
+      // Show notification
+      if (failCount === 0) {
+        message.success(`Started backup for ${successCount} database(s) in workspace`);
+      } else {
+        message.warning(
+          `Started backup for ${successCount} database(s), ${failCount} failed. Check console for details.`,
+        );
+      }
+
+      // Reload current database backups after a delay
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      setCurrentLimit(BACKUPS_PAGE_SIZE);
+      setHasMore(true);
+      await loadBackups(BACKUPS_PAGE_SIZE);
+    } catch (e) {
+      alert((e as Error).message);
+    }
+
+    setIsBackupAllWorkspaceLoading(false);
+  };
+
+  const handleBackupAllServerClick = async () => {
+    if (!workspaceId || !database.serverId) return;
+
+    try {
+      // Get all databases to count
+      const allDatabases = await databaseApi.getDatabases(workspaceId);
+      const serverDatabases = allDatabases.filter(
+        (db) => db.serverId === database.serverId && db.id !== database.id,
+      );
+
+      if (serverDatabases.length === 0) {
+        message.info('No other databases found on this server');
+        return;
+      }
+
+      setBackupAllServerCount(serverDatabases.length);
+      setBackupAllServerName(database.serverName || 'this server');
+      setShowBackupAllServerConfirm(true);
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  };
+
+  const handleBackupAllWorkspaceClick = async () => {
+    if (!workspaceId) return;
+
+    try {
+      // Get all databases to count
+      const allDatabases = await databaseApi.getDatabases(workspaceId);
+      const workspaceDatabases = allDatabases.filter((db) => db.id !== database.id);
+
+      if (workspaceDatabases.length === 0) {
+        message.info('No other databases found in workspace');
+        return;
+      }
+
+      setBackupAllWorkspaceCount(workspaceDatabases.length);
+      setShowBackupAllWorkspaceConfirm(true);
+    } catch (e) {
+      alert((e as Error).message);
+    }
   };
 
   const deleteBackup = async () => {
@@ -651,22 +779,38 @@ export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef,
         <Button
           onClick={makeBackup}
           type="primary"
-          disabled={isMakeBackupRequestLoading}
+          disabled={isMakeBackupRequestLoading || isBackupAllServerLoading || isBackupAllWorkspaceLoading}
           loading={isMakeBackupRequestLoading}
         >
           <span className="md:hidden">Backup now</span>
           <span className="hidden md:inline">Make backup right now</span>
         </Button>
 
+        {workspaceId && database.serverId && (
+          <Tooltip title="Backup all databases on this server">
+            <Button
+              onClick={handleBackupAllServerClick}
+              disabled={isBackupAllServerLoading || isBackupAllWorkspaceLoading || isMakeBackupRequestLoading}
+              loading={isBackupAllServerLoading}
+            >
+              <span className="md:hidden">Backup All</span>
+              <span className="hidden md:inline">Backup All Databases</span>
+            </Button>
+          </Tooltip>
+        )}
+
         {workspaceId && (
-          <Button
-            onClick={backupAll}
-            disabled={isBackupAllLoading || isMakeBackupRequestLoading}
-            loading={isBackupAllLoading}
-          >
-            <span className="md:hidden">Backup All</span>
-            <span className="hidden md:inline">Backup All Databases</span>
-          </Button>
+          <Tooltip title="Backup all databases in workspace">
+            <Button
+              onClick={handleBackupAllWorkspaceClick}
+              disabled={isBackupAllServerLoading || isBackupAllWorkspaceLoading || isMakeBackupRequestLoading}
+              loading={isBackupAllWorkspaceLoading}
+              ghost
+            >
+              <span className="md:hidden">Backup Workspace</span>
+              <span className="hidden md:inline">Backup All Workspace</span>
+            </Button>
+          </Tooltip>
         )}
       </div>
 
@@ -771,6 +915,32 @@ export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef,
           description="Are you sure you want to delete this backup?"
           actionButtonColor="red"
           actionText="Delete"
+        />
+      )}
+
+      {showBackupAllServerConfirm && (
+        <ConfirmationComponent
+          onConfirm={async () => {
+            setShowBackupAllServerConfirm(false);
+            await backupAllServer();
+          }}
+          onDecline={() => setShowBackupAllServerConfirm(false)}
+          description={`Backup ${backupAllServerCount} database(s) on server "${backupAllServerName}"?`}
+          actionButtonColor="blue"
+          actionText="Backup"
+        />
+      )}
+
+      {showBackupAllWorkspaceConfirm && (
+        <ConfirmationComponent
+          onConfirm={async () => {
+            setShowBackupAllWorkspaceConfirm(false);
+            await backupAllWorkspace();
+          }}
+          onDecline={() => setShowBackupAllWorkspaceConfirm(false)}
+          description={`Backup all ${backupAllWorkspaceCount} database(s) in workspace? This may take a while.`}
+          actionButtonColor="blue"
+          actionText="Backup All"
         />
       )}
 
