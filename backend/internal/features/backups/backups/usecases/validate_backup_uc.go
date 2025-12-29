@@ -2,23 +2,18 @@ package usecases
 
 import (
 	"context"
-	"time"
 
+	usecases_common "postgresus-backend/internal/features/backups/backups/usecases/common"
 	usecases_mariadb "postgresus-backend/internal/features/backups/backups/usecases/mariadb"
 	usecases_mongodb "postgresus-backend/internal/features/backups/backups/usecases/mongodb"
 	usecases_mysql "postgresus-backend/internal/features/backups/backups/usecases/mysql"
 	usecases_postgresql "postgresus-backend/internal/features/backups/backups/usecases/postgresql"
-	"postgresus-backend/internal/features/backups/backups"
 	"postgresus-backend/internal/features/databases"
 	"postgresus-backend/internal/features/storages"
 )
 
-type ValidationResult struct {
-	IsValid     bool
-	Error       *string
-	Details     *string
-	ValidatedAt time.Time
-}
+type ValidationResult = usecases_common.ValidationResult
+type BackupInfo = usecases_common.BackupInfo
 
 type ValidateBackupUsecase struct {
 	ValidatePostgresqlBackupUsecase *usecases_postgresql.ValidatePostgresqlBackupUsecase
@@ -29,7 +24,7 @@ type ValidateBackupUsecase struct {
 
 func (uc *ValidateBackupUsecase) Execute(
 	ctx context.Context,
-	backup *backups.Backup,
+	backup *BackupInfo,
 	database *databases.Database,
 	storage *storages.Storage,
 ) (*ValidationResult, error) {

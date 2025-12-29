@@ -13,6 +13,7 @@ import (
 
 	audit_logs "postgresus-backend/internal/features/audit_logs"
 	"postgresus-backend/internal/features/backups/backups/encryption"
+	usecases_common "postgresus-backend/internal/features/backups/backups/usecases/common"
 	backups_config "postgresus-backend/internal/features/backups/config"
 	"postgresus-backend/internal/features/databases"
 	encryption_secrets "postgresus-backend/internal/features/encryption/secrets"
@@ -597,7 +598,15 @@ func (s *BackupService) ValidateBackup(
 	// Run validation in background
 	go func() {
 		ctx := context.Background()
-		result, err := s.validateBackupUseCase.Execute(ctx, backup, database, storage)
+		backupInfo := &usecases_common.BackupInfo{
+			ID:            backup.ID,
+			DatabaseID:    backup.DatabaseID,
+			StorageID:     backup.StorageID,
+			Encryption:    backup.Encryption,
+			EncryptionSalt: backup.EncryptionSalt,
+			EncryptionIV:   backup.EncryptionIV,
+		}
+		result, err := s.validateBackupUseCase.Execute(ctx, backupInfo, database, storage)
 		
 		var validationStatus ValidationStatus
 		var validationError *string

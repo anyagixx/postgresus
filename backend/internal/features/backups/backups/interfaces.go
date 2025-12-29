@@ -4,7 +4,6 @@ import (
 	"context"
 
 	usecases_common "postgresus-backend/internal/features/backups/backups/usecases/common"
-	"postgresus-backend/internal/features/backups/backups/usecases"
 	backups_config "postgresus-backend/internal/features/backups/config"
 	"postgresus-backend/internal/features/databases"
 	"postgresus-backend/internal/features/notifiers"
@@ -35,10 +34,10 @@ type CreateBackupUsecase interface {
 type ValidateBackupUsecase interface {
 	Execute(
 		ctx context.Context,
-		backup *Backup,
+		backup *usecases_common.BackupInfo,
 		database *databases.Database,
 		storage *storages.Storage,
-	) (*usecases.ValidationResult, error)
+	) (*usecases_common.ValidationResult, error)
 }
 
 type BackupRemoveListener interface {

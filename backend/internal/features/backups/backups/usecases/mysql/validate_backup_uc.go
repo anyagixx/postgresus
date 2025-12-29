@@ -14,12 +14,13 @@ import (
 	"github.com/klauspost/compress/zstd"
 
 	"postgresus-backend/internal/config"
+	backup_encryption "postgresus-backend/internal/features/backups/backups/encryption"
 	backups_config "postgresus-backend/internal/features/backups/config"
-	"postgresus-backend/internal/features/backups/backups"
+	usecases_common "postgresus-backend/internal/features/backups/backups/usecases/common"
 	"postgresus-backend/internal/features/databases"
 	encryption_secrets "postgresus-backend/internal/features/encryption/secrets"
 	"postgresus-backend/internal/features/storages"
-	"postgresus-backend/internal/util/encryption"
+	util_encryption "postgresus-backend/internal/util/encryption"
 	files_utils "postgresus-backend/internal/util/files"
 
 	"github.com/google/uuid"
@@ -28,7 +29,7 @@ import (
 type ValidateMysqlBackupUsecase struct {
 	logger           *slog.Logger
 	secretKeyService *encryption_secrets.SecretKeyService
-	fieldEncryptor   encryption.FieldEncryptor
+	fieldEncryptor   util_encryption.FieldEncryptor
 }
 
 type ValidationResult struct {
@@ -40,7 +41,7 @@ type ValidationResult struct {
 
 func (uc *ValidateMysqlBackupUsecase) Execute(
 	ctx context.Context,
-	backup *backups.Backup,
+	backup *usecases_common.BackupInfo,
 	database *databases.Database,
 	storage *storages.Storage,
 ) (*ValidationResult, error) {
@@ -136,7 +137,7 @@ func (uc *ValidateMysqlBackupUsecase) Execute(
 // downloadBackupToTempFile downloads backup data from storage to a temporary file
 func (uc *ValidateMysqlBackupUsecase) downloadBackupToTempFile(
 	ctx context.Context,
-	backup *backups.Backup,
+	backup *usecases_common.BackupInfo,
 	storage *storages.Storage,
 ) (string, func(), error) {
 	err := files_utils.EnsureDirectories([]string{
@@ -164,7 +165,7 @@ func (uc *ValidateMysqlBackupUsecase) downloadBackupToTempFile(
 		"encrypted", backup.Encryption == backups_config.BackupEncryptionEncrypted,
 	)
 
-	fieldEncryptor := encryption.GetFieldEncryptor()
+	fieldEncryptor := util_encryption.GetFieldEncryptor()
 	rawReader, err := storage.GetFile(fieldEncryptor, backup.ID)
 	if err != nil {
 		cleanupFunc()
@@ -210,7 +211,7 @@ func (uc *ValidateMysqlBackupUsecase) downloadBackupToTempFile(
 
 func (uc *ValidateMysqlBackupUsecase) setupDecryption(
 	reader io.Reader,
-	backup *backups.Backup,
+	backup *usecases_common.BackupInfo,
 ) (io.Reader, error) {
 	if backup.EncryptionSalt == nil || backup.EncryptionIV == nil {
 		return nil, fmt.Errorf("backup is encrypted but missing encryption metadata")
@@ -231,7 +232,7 @@ func (uc *ValidateMysqlBackupUsecase) setupDecryption(
 		return nil, fmt.Errorf("failed to decode encryption IV: %w", err)
 	}
 
-	decryptReader, err := encryption.NewDecryptionReader(
+	decryptReader, err := backup_encryption.NewDecryptionReader(
 		reader,
 		masterKey,
 		backup.ID,

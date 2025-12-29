@@ -3,7 +3,6 @@ package usecases_postgresql
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -14,13 +13,13 @@ import (
 	"time"
 
 	"postgresus-backend/internal/config"
+	backup_encryption "postgresus-backend/internal/features/backups/backups/encryption"
 	backups_config "postgresus-backend/internal/features/backups/config"
-	"postgresus-backend/internal/features/backups/backups"
+	usecases_common "postgresus-backend/internal/features/backups/backups/usecases/common"
 	"postgresus-backend/internal/features/databases"
-	pgtypes "postgresus-backend/internal/features/databases/databases/postgresql"
 	encryption_secrets "postgresus-backend/internal/features/encryption/secrets"
 	"postgresus-backend/internal/features/storages"
-	"postgresus-backend/internal/util/encryption"
+	util_encryption "postgresus-backend/internal/util/encryption"
 	files_utils "postgresus-backend/internal/util/files"
 	"postgresus-backend/internal/util/tools"
 
@@ -30,7 +29,7 @@ import (
 type ValidatePostgresqlBackupUsecase struct {
 	logger           *slog.Logger
 	secretKeyService *encryption_secrets.SecretKeyService
-	fieldEncryptor   encryption.FieldEncryptor
+	fieldEncryptor   util_encryption.FieldEncryptor
 }
 
 type ValidationResult struct {
@@ -42,7 +41,7 @@ type ValidationResult struct {
 
 func (uc *ValidatePostgresqlBackupUsecase) Execute(
 	ctx context.Context,
-	backup *backups.Backup,
+	backup *usecases_common.BackupInfo,
 	database *databases.Database,
 	storage *storages.Storage,
 ) (*ValidationResult, error) {
@@ -122,7 +121,7 @@ func (uc *ValidatePostgresqlBackupUsecase) Execute(
 // downloadBackupToTempFile downloads backup data from storage to a temporary file
 func (uc *ValidatePostgresqlBackupUsecase) downloadBackupToTempFile(
 	ctx context.Context,
-	backup *backups.Backup,
+	backup *usecases_common.BackupInfo,
 	storage *storages.Storage,
 ) (string, func(), error) {
 	err := files_utils.EnsureDirectories([]string{
@@ -151,7 +150,7 @@ func (uc *ValidatePostgresqlBackupUsecase) downloadBackupToTempFile(
 		"tempFile", tempBackupFile,
 		"encrypted", backup.Encryption == backups_config.BackupEncryptionEncrypted,
 	)
-	fieldEncryptor := encryption.GetFieldEncryptor()
+	fieldEncryptor := util_encryption.GetFieldEncryptor()
 	rawReader, err := storage.GetFile(fieldEncryptor, backup.ID)
 	if err != nil {
 		cleanupFunc()
@@ -193,7 +192,7 @@ func (uc *ValidatePostgresqlBackupUsecase) downloadBackupToTempFile(
 		}
 
 		// Create decryption reader
-		decryptReader, err := encryption.NewDecryptionReader(
+		decryptReader, err := backup_encryption.NewDecryptionReader(
 			rawReader,
 			masterKey,
 			backup.ID,
