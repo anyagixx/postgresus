@@ -36,6 +36,7 @@ type BackupService struct {
 	fieldEncryptor      util_encryption.FieldEncryptor
 
 	createBackupUseCase CreateBackupUsecase
+	validateBackupUseCase ValidateBackupUsecase
 
 	logger *slog.Logger
 
@@ -544,6 +545,102 @@ func (s *BackupService) GetBackupFile(
 	}
 
 	return reader, database.Type, nil
+}
+
+func (s *BackupService) ValidateBackup(
+	user *users_models.User,
+	backupID uuid.UUID,
+) error {
+	backup, err := s.backupRepository.FindByID(backupID)
+	if err != nil {
+		return err
+	}
+
+	database, err := s.databaseService.GetDatabaseByID(backup.DatabaseID)
+	if err != nil {
+		return err
+	}
+
+	if database.WorkspaceID == nil {
+		return errors.New("cannot validate backup for database without workspace")
+	}
+
+	canAccess, _, err := s.workspaceService.CanUserAccessWorkspace(*database.WorkspaceID, user)
+	if err != nil {
+		return err
+	}
+	if !canAccess {
+		return errors.New("insufficient permissions to validate backup for this database")
+	}
+
+	if backup.Status != BackupStatusCompleted {
+		return errors.New("can only validate completed backups")
+	}
+
+	storage, err := s.storageService.GetStorageByID(backup.StorageID)
+	if err != nil {
+		return err
+	}
+
+	// Update status to PENDING
+	err = s.backupRepository.UpdateValidationStatus(
+		backupID,
+		ValidationStatusPending,
+		nil,
+		nil,
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update validation status: %w", err)
+	}
+
+	// Run validation in background
+	go func() {
+		ctx := context.Background()
+		result, err := s.validateBackupUseCase.Execute(ctx, backup, database, storage)
+		
+		var validationStatus ValidationStatus
+		var validationError *string
+		var validationDetails *string
+		validatedAt := time.Now().UTC()
+
+		if err != nil {
+			validationStatus = ValidationStatusInvalid
+			errMsg := fmt.Sprintf("validation failed: %v", err)
+			validationError = &errMsg
+		} else if result.IsValid {
+			validationStatus = ValidationStatusValid
+			validationDetails = result.Details
+		} else {
+			validationStatus = ValidationStatusInvalid
+			validationError = result.Error
+			validationDetails = result.Details
+		}
+
+		updateErr := s.backupRepository.UpdateValidationStatus(
+			backupID,
+			validationStatus,
+			&validatedAt,
+			validationError,
+			validationDetails,
+		)
+		if updateErr != nil {
+			s.logger.Error("Failed to update validation status", "error", updateErr)
+		}
+
+		s.auditLogService.WriteAuditLog(
+			fmt.Sprintf(
+				"Backup validation %s for database: %s (ID: %s)",
+				validationStatus,
+				database.Name,
+				backupID.String(),
+			),
+			&user.ID,
+			database.WorkspaceID,
+		)
+	}()
+
+	return nil
 }
 
 func (s *BackupService) deleteBackup(backup *Backup) error {

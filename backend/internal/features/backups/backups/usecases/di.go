@@ -14,6 +14,17 @@ var createBackupUsecase = &CreateBackupUsecase{
 	usecases_mongodb.GetCreateMongodbBackupUsecase(),
 }
 
+var validateBackupUsecase = &ValidateBackupUsecase{
+	usecases_postgresql.GetValidatePostgresqlBackupUsecase(),
+	usecases_mysql.GetValidateMysqlBackupUsecase(),
+	usecases_mariadb.GetValidateMariadbBackupUsecase(),
+	usecases_mongodb.GetValidateMongodbBackupUsecase(),
+}
+
 func GetCreateBackupUsecase() *CreateBackupUsecase {
 	return createBackupUsecase
+}
+
+func GetValidateBackupUsecase() *ValidateBackupUsecase {
+	return validateBackupUsecase
 }

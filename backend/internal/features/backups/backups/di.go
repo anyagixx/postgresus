@@ -29,6 +29,7 @@ var backupService = &BackupService{
 	encryption_secrets.GetSecretKeyService(),
 	encryption.GetFieldEncryptor(),
 	usecases.GetCreateBackupUsecase(),
+	usecases.GetValidateBackupUsecase(),
 	logger.GetLogger(),
 	[]BackupRemoveListener{},
 	workspaces_services.GetWorkspaceService(),

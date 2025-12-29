@@ -8,3 +8,12 @@ const (
 	BackupStatusFailed     BackupStatus = "FAILED"
 	BackupStatusCanceled   BackupStatus = "CANCELED"
 )
+
+type ValidationStatus string
+
+const (
+	ValidationStatusNotValidated ValidationStatus = "NOT_VALIDATED"
+	ValidationStatusPending      ValidationStatus = "PENDING"
+	ValidationStatusValid         ValidationStatus = "VALID"
+	ValidationStatusInvalid       ValidationStatus = "INVALID"
+)

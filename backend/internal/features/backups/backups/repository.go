@@ -212,3 +212,33 @@ func (r *BackupRepository) CountByDatabaseID(databaseID uuid.UUID) (int64, error
 
 	return count, nil
 }
+
+func (r *BackupRepository) UpdateValidationStatus(
+	backupID uuid.UUID,
+	status ValidationStatus,
+	validatedAt *time.Time,
+	validationError *string,
+	validationDetails *string,
+) error {
+	updates := map[string]interface{}{
+		"validation_status": status,
+	}
+
+	if validatedAt != nil {
+		updates["validated_at"] = *validatedAt
+	}
+
+	if validationError != nil {
+		updates["validation_error"] = *validationError
+	}
+
+	if validationDetails != nil {
+		updates["validation_details"] = *validationDetails
+	}
+
+	return storage.GetDb().
+		Model(&Backup{}).
+		Where("id = ?", backupID).
+		Updates(updates).
+		Error
+}

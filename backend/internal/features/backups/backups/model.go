@@ -24,5 +24,10 @@ type Backup struct {
 	EncryptionIV   *string                         `json:"-"          gorm:"column:encryption_iv"`
 	Encryption     backups_config.BackupEncryption `json:"encryption" gorm:"column:encryption;type:text;not null;default:'NONE'"`
 
+	ValidationStatus *ValidationStatus `json:"validationStatus" gorm:"column:validation_status;type:text"`
+	ValidatedAt      *time.Time       `json:"validatedAt"      gorm:"column:validated_at"`
+	ValidationError  *string           `json:"validationError"  gorm:"column:validation_error;type:text"`
+	ValidationDetails *string          `json:"validationDetails" gorm:"column:validation_details;type:text"`
+
 	CreatedAt time.Time `json:"createdAt" gorm:"column:created_at"`
 }
