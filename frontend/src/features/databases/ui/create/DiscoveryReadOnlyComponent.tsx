@@ -36,9 +36,32 @@ export const DiscoveryReadOnlyComponent = ({
     const [isShowSkipConfirmation, setShowSkipConfirmation] = useState(false);
     const [isAlreadyReadOnly, setIsAlreadyReadOnly] = useState(false);
 
+    // Convert string database type to DatabaseType enum
+    const getDatabaseType = (): DatabaseType => {
+        const dbTypeStr = serverConnection.databaseType;
+        if (!dbTypeStr) {
+            return DatabaseType.POSTGRES;
+        }
+        // Convert string to DatabaseType enum
+        const upperType = dbTypeStr.toUpperCase();
+        if (upperType === 'POSTGRES' || upperType === 'POSTGRESQL') {
+            return DatabaseType.POSTGRES;
+        }
+        if (upperType === 'MYSQL') {
+            return DatabaseType.MYSQL;
+        }
+        if (upperType === 'MARIADB') {
+            return DatabaseType.MARIADB;
+        }
+        if (upperType === 'MONGODB') {
+            return DatabaseType.MONGODB;
+        }
+        return DatabaseType.POSTGRES; // Default fallback
+    };
+
     // Get database type name for UI display
     const getDatabaseTypeName = (): string => {
-        const dbType = serverConnection.databaseType || DatabaseType.POSTGRES;
+        const dbType = getDatabaseType();
         switch (dbType) {
             case DatabaseType.MYSQL:
                 return 'MySQL';
@@ -59,7 +82,7 @@ export const DiscoveryReadOnlyComponent = ({
     // by using the database object directly without looking up from DB
     const createTempDatabase = (): Database => {
         const firstDb = selectedDatabases[0];
-        const dbType = serverConnection.databaseType || DatabaseType.POSTGRES;
+        const dbType = getDatabaseType();
         
         const baseStructure: Partial<Database> = {
             name: firstDb.name,
