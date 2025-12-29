@@ -31,6 +31,15 @@ type CreateBackupUsecase interface {
 	) (*usecases_common.BackupMetadata, error)
 }
 
+type ValidateBackupUsecase interface {
+	Execute(
+		ctx context.Context,
+		backup *usecases_common.BackupInfo,
+		database *databases.Database,
+		storage *storages.Storage,
+	) (*usecases_common.ValidationResult, error)
+}
+
 type BackupRemoveListener interface {
 	OnBeforeBackupRemove(backup *Backup) error
 }

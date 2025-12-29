@@ -12,6 +12,16 @@ var createMariadbBackupUsecase = &CreateMariadbBackupUsecase{
 	encryption.GetFieldEncryptor(),
 }
 
+var validateMariadbBackupUsecase = &ValidateMariadbBackupUsecase{
+	logger.GetLogger(),
+	secrets.GetSecretKeyService(),
+	encryption.GetFieldEncryptor(),
+}
+
 func GetCreateMariadbBackupUsecase() *CreateMariadbBackupUsecase {
 	return createMariadbBackupUsecase
+}
+
+func GetValidateMariadbBackupUsecase() *ValidateMariadbBackupUsecase {
+	return validateMariadbBackupUsecase
 }

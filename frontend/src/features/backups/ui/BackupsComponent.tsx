@@ -7,6 +7,7 @@ import {
   ExclamationCircleOutlined,
   InfoCircleOutlined,
   LockOutlined,
+  SafetyCertificateOutlined,
   SyncOutlined,
 } from '@ant-design/icons';
 import { Button, Modal, Spin, Table, Tooltip } from 'antd';
@@ -19,6 +20,7 @@ import {
   type BackupConfig,
   BackupEncryption,
   BackupStatus,
+  ValidationStatus,
   backupConfigApi,
   backupsApi,
 } from '../../../entity/backups';
@@ -62,6 +64,7 @@ export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef,
 
   const [downloadingBackupId, setDownloadingBackupId] = useState<string | undefined>();
   const [cancellingBackupId, setCancellingBackupId] = useState<string | undefined>();
+  const [validatingBackupId, setValidatingBackupId] = useState<string | undefined>();
   const [isBackupAllLoading, setIsBackupAllLoading] = useState(false);
 
   const downloadBackup = async (backupId: string) => {
@@ -255,6 +258,22 @@ export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef,
     setCancellingBackupId(undefined);
   };
 
+  const validateBackup = async (backupId: string) => {
+    setValidatingBackupId(backupId);
+
+    try {
+      await backupsApi.validateBackup(backupId);
+      // Reload backups after a short delay to show updated validation status
+      setTimeout(async () => {
+        await reloadInProgressBackups();
+      }, 2000);
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setValidatingBackupId(undefined);
+    }
+  };
+
   useEffect(() => {
     setIsBackupConfigLoading(true);
     setCurrentLimit(BACKUPS_PAGE_SIZE);
@@ -331,13 +350,39 @@ export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef,
 
     if (status === BackupStatus.COMPLETED) {
       return (
-        <div className="flex items-center text-green-600">
-          <CheckCircleOutlined className="mr-2" style={{ fontSize: 16 }} />
-          <div>Successful</div>
-          {record.encryption === BackupEncryption.ENCRYPTED && (
-            <Tooltip title="Encrypted">
-              <LockOutlined className="ml-1" style={{ fontSize: 14 }} />
-            </Tooltip>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center text-green-600">
+            <CheckCircleOutlined className="mr-2" style={{ fontSize: 16 }} />
+            <div>Successful</div>
+            {record.encryption === BackupEncryption.ENCRYPTED && (
+              <Tooltip title="Encrypted">
+                <LockOutlined className="ml-1" style={{ fontSize: 14 }} />
+              </Tooltip>
+            )}
+          </div>
+          {record.validationStatus && (
+            <div className="flex items-center text-xs">
+              {record.validationStatus === ValidationStatus.VALID && (
+                <div className="flex items-center text-green-600">
+                  <CheckCircleOutlined className="mr-1" style={{ fontSize: 12 }} />
+                  <span>Validated</span>
+                </div>
+              )}
+              {record.validationStatus === ValidationStatus.INVALID && (
+                <Tooltip title={record.validationError || 'Validation failed'}>
+                  <div className="flex items-center text-red-600 cursor-pointer">
+                    <CloseCircleOutlined className="mr-1" style={{ fontSize: 12 }} />
+                    <span>Invalid</span>
+                  </div>
+                </Tooltip>
+              )}
+              {record.validationStatus === ValidationStatus.PENDING && (
+                <div className="flex items-center text-blue-600">
+                  <SyncOutlined spin className="mr-1" style={{ fontSize: 12 }} />
+                  <span>Validating...</span>
+                </div>
+              )}
+            </div>
           )}
         </div>
       );
@@ -451,6 +496,28 @@ export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef,
                       style={{
                         opacity: downloadingBackupId ? 0.2 : 1,
                         color: '#155dfc',
+                      }}
+                    />
+                  )}
+                </Tooltip>
+
+                <Tooltip title="Validate backup integrity">
+                  {validatingBackupId === record.id ? (
+                    <SyncOutlined spin style={{ color: '#52c41a' }} />
+                  ) : (
+                    <SafetyCertificateOutlined
+                      className="cursor-pointer"
+                      onClick={() => {
+                        if (validatingBackupId) return;
+                        validateBackup(record.id);
+                      }}
+                      style={{
+                        opacity: validatingBackupId ? 0.2 : 1,
+                        color: record.validationStatus === ValidationStatus.VALID
+                          ? '#52c41a'
+                          : record.validationStatus === ValidationStatus.INVALID
+                            ? '#ff4d4f'
+                            : '#faad14',
                       }}
                     />
                   )}
@@ -627,6 +694,11 @@ export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef,
                         <div className="text-xs text-gray-500 dark:text-gray-400">
                           ({dayjs.utc(backup.createdAt).local().fromNow()})
                         </div>
+                        {backup.validatedAt && (
+                          <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            Validated: {dayjs.utc(backup.validatedAt).local().fromNow()}
+                          </div>
+                        )}
                       </div>
                       <div>{renderStatus(backup.status, backup)}</div>
                     </div>

@@ -12,6 +12,16 @@ var createMysqlBackupUsecase = &CreateMysqlBackupUsecase{
 	encryption.GetFieldEncryptor(),
 }
 
+var validateMysqlBackupUsecase = &ValidateMysqlBackupUsecase{
+	logger.GetLogger(),
+	secrets.GetSecretKeyService(),
+	encryption.GetFieldEncryptor(),
+}
+
 func GetCreateMysqlBackupUsecase() *CreateMysqlBackupUsecase {
 	return createMysqlBackupUsecase
+}
+
+func GetValidateMysqlBackupUsecase() *ValidateMysqlBackupUsecase {
+	return validateMysqlBackupUsecase
 }

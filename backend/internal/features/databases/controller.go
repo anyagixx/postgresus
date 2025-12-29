@@ -2,8 +2,12 @@ package databases
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"postgresus-backend/internal/features/databases/databases/mariadb"
+	"postgresus-backend/internal/features/databases/databases/mongodb"
+	"postgresus-backend/internal/features/databases/databases/mysql"
 	"postgresus-backend/internal/features/databases/databases/postgresql"
 	"postgresus-backend/internal/features/servers"
 	users_middleware "postgresus-backend/internal/features/users/middleware"
@@ -421,12 +425,12 @@ func (c *DatabaseController) CreateReadOnlyUser(ctx *gin.Context) {
 
 // DiscoverDatabases
 // @Summary Discover databases on a server
-// @Description Connect to a PostgreSQL server and list all available databases
+// @Description Connect to a database server (PostgreSQL, MySQL, MariaDB, or MongoDB) and list all available databases
 // @Tags databases
 // @Accept json
 // @Produce json
-// @Param request body postgresql.DiscoveryRequest true "Server connection data"
-// @Success 200 {array} postgresql.DatabaseInfo
+// @Param request body DiscoverDatabasesRequest true "Server connection data with database type"
+// @Success 200 {object} map[string]interface{} "Response contains 'databases' array"
 // @Failure 400
 // @Failure 401
 // @Router /databases/discover [post]
@@ -437,19 +441,125 @@ func (c *DatabaseController) DiscoverDatabases(ctx *gin.Context) {
 		return
 	}
 
-	var request postgresql.DiscoveryRequest
+	var request DiscoverDatabasesRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	databases, err := postgresql.ListDatabasesOnServer(request)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	// Normalize database type (handle both uppercase and lowercase)
+	dbType := request.DatabaseType
+	switch dbType {
+	case "postgres", "postgresql", "POSTGRES", "POSTGRESQL":
+		req := postgresql.DiscoveryRequest{
+			Host:     request.Host,
+			Port:     request.Port,
+			Username: request.Username,
+			Password: request.Password,
+			IsHttps:  request.IsHttps,
+		}
+		databases, err := postgresql.ListDatabasesOnServer(req)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		// Convert to common format
+		result := make([]map[string]interface{}, len(databases))
+		for i, db := range databases {
+			result[i] = map[string]interface{}{
+				"name":  db.Name,
+				"size":  db.Size,
+				"owner": db.Owner,
+			}
+		}
+		ctx.JSON(http.StatusOK, gin.H{"databases": result})
+
+	case "mysql", "MYSQL":
+		req := mysql.DiscoveryRequest{
+			Host:     request.Host,
+			Port:     request.Port,
+			Username: request.Username,
+			Password: request.Password,
+			IsHttps:  request.IsHttps,
+		}
+		databases, err := mysql.ListDatabasesOnServer(req)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		// Convert to common format
+		result := make([]map[string]interface{}, len(databases))
+		for i, db := range databases {
+			result[i] = map[string]interface{}{
+				"name":  db.Name,
+				"size":  db.Size,
+				"owner": db.Owner,
+			}
+		}
+		ctx.JSON(http.StatusOK, gin.H{"databases": result})
+
+	case "mariadb", "MARIADB":
+		req := mariadb.DiscoveryRequest{
+			Host:     request.Host,
+			Port:     request.Port,
+			Username: request.Username,
+			Password: request.Password,
+			IsHttps:  request.IsHttps,
+		}
+		databases, err := mariadb.ListDatabasesOnServer(req)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		// Convert to common format
+		result := make([]map[string]interface{}, len(databases))
+		for i, db := range databases {
+			result[i] = map[string]interface{}{
+				"name":  db.Name,
+				"size":  db.Size,
+				"owner": db.Owner,
+			}
+		}
+		ctx.JSON(http.StatusOK, gin.H{"databases": result})
+
+	case "mongodb", "MONGODB":
+		req := mongodb.DiscoveryRequest{
+			Host:     request.Host,
+			Port:     request.Port,
+			Username: request.Username,
+			Password: request.Password,
+			IsHttps:  request.IsHttps,
+		}
+		databases, err := mongodb.ListDatabasesOnServer(req)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		// Convert to common format
+		result := make([]map[string]interface{}, len(databases))
+		for i, db := range databases {
+			result[i] = map[string]interface{}{
+				"name":  db.Name,
+				"size":  db.Size,
+				"owner": db.Owner,
+			}
+		}
+		ctx.JSON(http.StatusOK, gin.H{"databases": result})
+
+	default:
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "unsupported database type: " + request.DatabaseType})
 		return
 	}
+}
 
-	ctx.JSON(http.StatusOK, gin.H{"databases": databases})
+// DiscoverDatabasesRequest represents request for database discovery
+type DiscoverDatabasesRequest struct {
+	DatabaseType string `json:"databaseType"` // "postgres", "postgresql", "mysql", "mariadb", "mongodb"
+	Host         string `json:"host"`
+	Port         int    `json:"port"`
+	Username     string `json:"username"`
+	Password     string `json:"password"`
+	IsHttps      bool   `json:"isHttps"`
 }
 
 // CreateDatabaseBatchRequest represents request for batch database creation
@@ -582,17 +692,50 @@ func (c *DatabaseController) GrantReadOnlyAccess(ctx *gin.Context) {
 	var errors []string
 
 	for _, dbName := range request.Databases {
-		err := postgresql.GrantReadOnlyAccess(
-			grantCtx,
-			logger,
-			request.Host,
-			request.Port,
-			request.AdminUsername,
-			request.AdminPassword,
-			request.IsHttps,
-			dbName,
-			request.Username,
-		)
+		var err error
+		// Normalize database type (handle both uppercase and lowercase)
+		dbType := request.DatabaseType
+		switch dbType {
+		case "postgres", "postgresql", "POSTGRES", "POSTGRESQL":
+			err = postgresql.GrantReadOnlyAccess(
+				grantCtx,
+				logger,
+				request.Host,
+				request.Port,
+				request.AdminUsername,
+				request.AdminPassword,
+				request.IsHttps,
+				dbName,
+				request.Username,
+			)
+		case "mysql", "MYSQL":
+			err = mysql.GrantReadOnlyAccess(
+				grantCtx,
+				logger,
+				request.Host,
+				request.Port,
+				request.AdminUsername,
+				request.AdminPassword,
+				request.IsHttps,
+				dbName,
+				request.Username,
+			)
+		case "mariadb", "MARIADB":
+			err = mariadb.GrantReadOnlyAccess(
+				grantCtx,
+				logger,
+				request.Host,
+				request.Port,
+				request.AdminUsername,
+				request.AdminPassword,
+				request.IsHttps,
+				dbName,
+				request.Username,
+			)
+		default:
+			err = fmt.Errorf("grant read-only access not supported for database type: %s", dbType)
+		}
+
 		if err != nil {
 			failedDatabases = append(failedDatabases, dbName)
 			errors = append(errors, err.Error())

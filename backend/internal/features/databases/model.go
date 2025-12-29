@@ -2,6 +2,7 @@ package databases
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"postgresus-backend/internal/features/databases/databases/mariadb"
 	"postgresus-backend/internal/features/databases/databases/mongodb"
@@ -96,38 +97,64 @@ func (d *Database) HideSensitiveData() {
 }
 
 func (d *Database) EncryptSensitiveFields(encryptor encryption.FieldEncryptor) error {
-	if d.Postgresql != nil {
+	// Use database type instead of checking which structure is not nil
+	// This prevents calling wrong method when multiple structures are set
+	switch d.Type {
+	case DatabaseTypePostgres:
+		if d.Postgresql == nil {
+			return errors.New("postgresql configuration is missing")
+		}
 		return d.Postgresql.EncryptSensitiveFields(d.ID, encryptor)
-	}
-	if d.Mysql != nil {
+	case DatabaseTypeMysql:
+		if d.Mysql == nil {
+			return errors.New("mysql configuration is missing")
+		}
 		return d.Mysql.EncryptSensitiveFields(d.ID, encryptor)
-	}
-	if d.Mariadb != nil {
+	case DatabaseTypeMariadb:
+		if d.Mariadb == nil {
+			return errors.New("mariadb configuration is missing")
+		}
 		return d.Mariadb.EncryptSensitiveFields(d.ID, encryptor)
-	}
-	if d.Mongodb != nil {
+	case DatabaseTypeMongodb:
+		if d.Mongodb == nil {
+			return errors.New("mongodb configuration is missing")
+		}
 		return d.Mongodb.EncryptSensitiveFields(d.ID, encryptor)
+	default:
+		return fmt.Errorf("unsupported database type: %s", d.Type)
 	}
-	return nil
 }
 
 func (d *Database) PopulateVersionIfEmpty(
 	logger *slog.Logger,
 	encryptor encryption.FieldEncryptor,
 ) error {
-	if d.Postgresql != nil {
+	// Use database type instead of checking which structure is not nil
+	// This prevents calling wrong method when multiple structures are set
+	switch d.Type {
+	case DatabaseTypePostgres:
+		if d.Postgresql == nil {
+			return errors.New("postgresql configuration is missing")
+		}
 		return d.Postgresql.PopulateVersionIfEmpty(logger, encryptor, d.ID)
-	}
-	if d.Mysql != nil {
+	case DatabaseTypeMysql:
+		if d.Mysql == nil {
+			return errors.New("mysql configuration is missing")
+		}
 		return d.Mysql.PopulateVersionIfEmpty(logger, encryptor, d.ID)
-	}
-	if d.Mariadb != nil {
+	case DatabaseTypeMariadb:
+		if d.Mariadb == nil {
+			return errors.New("mariadb configuration is missing")
+		}
 		return d.Mariadb.PopulateVersionIfEmpty(logger, encryptor, d.ID)
-	}
-	if d.Mongodb != nil {
+	case DatabaseTypeMongodb:
+		if d.Mongodb == nil {
+			return errors.New("mongodb configuration is missing")
+		}
 		return d.Mongodb.PopulateVersionIfEmpty(logger, encryptor, d.ID)
+	default:
+		return fmt.Errorf("unsupported database type: %s", d.Type)
 	}
-	return nil
 }
 
 func (d *Database) Update(incoming *Database) {
@@ -159,12 +186,24 @@ func (d *Database) Update(incoming *Database) {
 func (d *Database) getSpecificDatabase() DatabaseConnector {
 	switch d.Type {
 	case DatabaseTypePostgres:
+		if d.Postgresql == nil {
+			panic("postgresql configuration is missing for PostgreSQL database")
+		}
 		return d.Postgresql
 	case DatabaseTypeMysql:
+		if d.Mysql == nil {
+			panic("mysql configuration is missing for MySQL database")
+		}
 		return d.Mysql
 	case DatabaseTypeMariadb:
+		if d.Mariadb == nil {
+			panic("mariadb configuration is missing for MariaDB database")
+		}
 		return d.Mariadb
 	case DatabaseTypeMongodb:
+		if d.Mongodb == nil {
+			panic("mongodb configuration is missing for MongoDB database")
+		}
 		return d.Mongodb
 	}
 

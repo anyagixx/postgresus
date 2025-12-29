@@ -21,6 +21,7 @@ func (c *BackupController) RegisterRoutes(router *gin.RouterGroup) {
 	router.GET("/backups/:id/file", c.GetFile)
 	router.DELETE("/backups/:id", c.DeleteBackup)
 	router.POST("/backups/:id/cancel", c.CancelBackup)
+	router.POST("/backups/:id/validate", c.ValidateBackup)
 }
 
 // GetBackups
@@ -213,4 +214,35 @@ func (c *BackupController) GetFile(ctx *gin.Context) {
 
 type MakeBackupRequest struct {
 	DatabaseID uuid.UUID `json:"database_id" binding:"required"`
+}
+
+// ValidateBackup
+// @Summary Validate a backup
+// @Description Validate the integrity of a completed backup
+// @Tags backups
+// @Param id path string true "Backup ID"
+// @Success 200 {object} map[string]string
+// @Failure 400
+// @Failure 401
+// @Failure 500
+// @Router /backups/{id}/validate [post]
+func (c *BackupController) ValidateBackup(ctx *gin.Context) {
+	user, ok := users_middleware.GetUserFromContext(ctx)
+	if !ok {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	id, err := uuid.Parse(ctx.Param("id"))
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid backup ID"})
+		return
+	}
+
+	if err := c.backupService.ValidateBackup(user, id); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"message": "backup validation started successfully"})
 }

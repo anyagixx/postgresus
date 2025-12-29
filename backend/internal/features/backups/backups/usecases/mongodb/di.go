@@ -12,6 +12,16 @@ var createMongodbBackupUsecase = &CreateMongodbBackupUsecase{
 	encryption.GetFieldEncryptor(),
 }
 
+var validateMongodbBackupUsecase = &ValidateMongodbBackupUsecase{
+	logger.GetLogger(),
+	encryption_secrets.GetSecretKeyService(),
+	encryption.GetFieldEncryptor(),
+}
+
 func GetCreateMongodbBackupUsecase() *CreateMongodbBackupUsecase {
 	return createMongodbBackupUsecase
+}
+
+func GetValidateMongodbBackupUsecase() *ValidateMongodbBackupUsecase {
+	return validateMongodbBackupUsecase
 }

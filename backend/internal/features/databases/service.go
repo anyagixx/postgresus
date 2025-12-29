@@ -71,6 +71,40 @@ func (s *DatabaseService) CreateDatabase(
 		return nil, err
 	}
 
+	// Ensure only the correct database-specific structure is set
+	switch database.Type {
+	case DatabaseTypePostgres:
+		if database.Mysql != nil || database.Mariadb != nil || database.Mongodb != nil {
+			return nil, errors.New("postgresql database should not have mysql/mariadb/mongodb configurations")
+		}
+		if database.Postgresql == nil {
+			return nil, errors.New("postgresql configuration is required for PostgreSQL database")
+		}
+	case DatabaseTypeMysql:
+		if database.Postgresql != nil || database.Mariadb != nil || database.Mongodb != nil {
+			return nil, errors.New("mysql database should not have postgresql/mariadb/mongodb configurations")
+		}
+		if database.Mysql == nil {
+			return nil, errors.New("mysql configuration is required for MySQL database")
+		}
+	case DatabaseTypeMariadb:
+		if database.Postgresql != nil || database.Mysql != nil || database.Mongodb != nil {
+			return nil, errors.New("mariadb database should not have postgresql/mysql/mongodb configurations")
+		}
+		if database.Mariadb == nil {
+			return nil, errors.New("mariadb configuration is required for MariaDB database")
+		}
+	case DatabaseTypeMongodb:
+		if database.Postgresql != nil || database.Mysql != nil || database.Mariadb != nil {
+			return nil, errors.New("mongodb database should not have postgresql/mysql/mariadb configurations")
+		}
+		if database.Mongodb == nil {
+			return nil, errors.New("mongodb configuration is required for MongoDB database")
+		}
+	default:
+		return nil, fmt.Errorf("unsupported database type: %s", database.Type)
+	}
+
 	if err := database.PopulateVersionIfEmpty(s.logger, s.fieldEncryptor); err != nil {
 		return nil, fmt.Errorf("failed to auto-detect database version: %w", err)
 	}

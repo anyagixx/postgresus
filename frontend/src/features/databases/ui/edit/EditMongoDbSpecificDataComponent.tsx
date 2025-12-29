@@ -77,7 +77,7 @@ export const EditMongoDbSpecificDataComponent = ({
           password: result.password,
           database: result.database,
           authDatabase: result.authDatabase,
-          useTls: result.useTls,
+          isHttps: result.useTls, // Convert useTls from parser to isHttps for backend
         },
       };
 
@@ -288,13 +288,13 @@ export const EditMongoDbSpecificDataComponent = ({
       <div className="mb-3 flex w-full items-center">
         <div className="min-w-[150px]">Use TLS</div>
         <Switch
-          checked={editingDatabase.mongodb?.useTls}
+          checked={editingDatabase.mongodb?.isHttps}
           onChange={(checked) => {
             if (!editingDatabase.mongodb) return;
 
             setEditingDatabase({
               ...editingDatabase,
-              mongodb: { ...editingDatabase.mongodb, useTls: checked },
+              mongodb: { ...editingDatabase.mongodb, isHttps: checked },
             });
             setIsConnectionTested(false);
           }}

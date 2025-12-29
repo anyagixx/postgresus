@@ -93,7 +93,7 @@ export const DiscoveryCreateDatabaseComponent = ({ workspaceId, preselectedServe
                     password: connectionData.password,
                     database: connectionData.database,
                     authDatabase: 'admin', // Default auth database for MongoDB
-                    useTls: connectionData.isHttps, // MongoDB uses useTls instead of isHttps
+                    isHttps: connectionData.isHttps, // Changed from useTls to isHttps to match backend
                 } as MongodbDatabase;
                 break;
             case DatabaseType.POSTGRES:

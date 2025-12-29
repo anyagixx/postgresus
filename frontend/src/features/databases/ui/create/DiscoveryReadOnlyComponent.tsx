@@ -6,8 +6,14 @@ import {
     DatabaseType,
     type DiscoveredDatabase,
     type PostgresqlDatabase,
+    type MysqlDatabase,
+    type MariadbDatabase,
+    type MongodbDatabase,
     type ServerConnection,
     databaseApi,
+    MysqlVersion,
+    MariadbVersion,
+    MongodbVersion,
 } from '../../../../entity/databases';
 
 interface Props {
@@ -30,23 +36,107 @@ export const DiscoveryReadOnlyComponent = ({
     const [isShowSkipConfirmation, setShowSkipConfirmation] = useState(false);
     const [isAlreadyReadOnly, setIsAlreadyReadOnly] = useState(false);
 
+    // Convert string database type to DatabaseType enum
+    const getDatabaseType = (): DatabaseType => {
+        const dbTypeStr = serverConnection.databaseType;
+        if (!dbTypeStr) {
+            return DatabaseType.POSTGRES;
+        }
+        // Convert string to DatabaseType enum
+        const upperType = dbTypeStr.toUpperCase();
+        if (upperType === 'POSTGRES' || upperType === 'POSTGRESQL') {
+            return DatabaseType.POSTGRES;
+        }
+        if (upperType === 'MYSQL') {
+            return DatabaseType.MYSQL;
+        }
+        if (upperType === 'MARIADB') {
+            return DatabaseType.MARIADB;
+        }
+        if (upperType === 'MONGODB') {
+            return DatabaseType.MONGODB;
+        }
+        return DatabaseType.POSTGRES; // Default fallback
+    };
+
+    // Get database type name for UI display
+    const getDatabaseTypeName = (): string => {
+        const dbType = getDatabaseType();
+        switch (dbType) {
+            case DatabaseType.MYSQL:
+                return 'MySQL';
+            case DatabaseType.MARIADB:
+                return 'MariaDB';
+            case DatabaseType.MONGODB:
+                return 'MongoDB';
+            case DatabaseType.POSTGRES:
+            default:
+                return 'PostgreSQL';
+        }
+    };
+
+    const databaseTypeName = getDatabaseTypeName();
+
     // Create a temporary database object to use with the existing API
     // Note: We don't set id or workspaceId - the backend handles this case
     // by using the database object directly without looking up from DB
     const createTempDatabase = (): Database => {
         const firstDb = selectedDatabases[0];
-        return {
+        const dbType = getDatabaseType();
+        
+        const baseStructure: Partial<Database> = {
             name: firstDb.name,
-            type: DatabaseType.POSTGRES,
-            postgresql: {
-                host: serverConnection.host,
-                port: serverConnection.port,
-                username: serverConnection.username,
-                password: serverConnection.password,
-                database: firstDb.name,
-                isHttps: serverConnection.isHttps,
-            } as PostgresqlDatabase,
-        } as Database;
+            type: dbType,
+            postgresql: undefined,
+            mysql: undefined,
+            mariadb: undefined,
+            mongodb: undefined,
+        };
+
+        const connectionData = {
+            host: serverConnection.host,
+            port: serverConnection.port,
+            username: serverConnection.username,
+            password: serverConnection.password,
+            database: firstDb.name,
+            isHttps: serverConnection.isHttps,
+        };
+
+        switch (dbType) {
+            case DatabaseType.MYSQL:
+                baseStructure.mysql = {
+                    id: undefined as unknown as string,
+                    version: MysqlVersion.MysqlVersion80,
+                    ...connectionData,
+                } as MysqlDatabase;
+                break;
+            case DatabaseType.MARIADB:
+                baseStructure.mariadb = {
+                    id: undefined as unknown as string,
+                    version: MariadbVersion.MariadbVersion106,
+                    ...connectionData,
+                } as MariadbDatabase;
+                break;
+            case DatabaseType.MONGODB:
+                baseStructure.mongodb = {
+                    id: undefined as unknown as string,
+                    version: MongodbVersion.MongodbVersion70,
+                    host: connectionData.host,
+                    port: connectionData.port,
+                    username: connectionData.username,
+                    password: connectionData.password,
+                    database: connectionData.database,
+                    authDatabase: 'admin',
+                    isHttps: connectionData.isHttps,
+                } as MongodbDatabase;
+                break;
+            case DatabaseType.POSTGRES:
+            default:
+                baseStructure.postgresql = connectionData as PostgresqlDatabase;
+                break;
+        }
+
+        return baseStructure as Database;
     };
 
     const checkReadOnlyUser = async (): Promise<boolean> => {
@@ -69,7 +159,9 @@ export const DiscoveryReadOnlyComponent = ({
 
             // Grant access to all selected databases (not just the first one)
             if (selectedDatabases.length > 1) {
+                const dbType = serverConnection.databaseType || DatabaseType.POSTGRES;
                 const grantResponse = await databaseApi.grantReadOnlyAccess({
+                    databaseType: dbType,
                     username: response.username,
                     host: serverConnection.host,
                     port: serverConnection.port,
@@ -153,7 +245,7 @@ export const DiscoveryReadOnlyComponent = ({
                 </p>
 
                 <p className="mb-2">
-                    A read-only user is a PostgreSQL user with limited permissions that can only read
+                    A read-only user is a {databaseTypeName} user with limited permissions that can only read
                     data from your database, not modify it. This is recommended because:
                 </p>
 
