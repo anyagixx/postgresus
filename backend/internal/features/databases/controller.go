@@ -2,6 +2,7 @@ package databases
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"postgresus-backend/internal/features/databases/databases/mariadb"
@@ -691,17 +692,50 @@ func (c *DatabaseController) GrantReadOnlyAccess(ctx *gin.Context) {
 	var errors []string
 
 	for _, dbName := range request.Databases {
-		err := postgresql.GrantReadOnlyAccess(
-			grantCtx,
-			logger,
-			request.Host,
-			request.Port,
-			request.AdminUsername,
-			request.AdminPassword,
-			request.IsHttps,
-			dbName,
-			request.Username,
-		)
+		var err error
+		// Normalize database type (handle both uppercase and lowercase)
+		dbType := request.DatabaseType
+		switch dbType {
+		case "postgres", "postgresql", "POSTGRES", "POSTGRESQL":
+			err = postgresql.GrantReadOnlyAccess(
+				grantCtx,
+				logger,
+				request.Host,
+				request.Port,
+				request.AdminUsername,
+				request.AdminPassword,
+				request.IsHttps,
+				dbName,
+				request.Username,
+			)
+		case "mysql", "MYSQL":
+			err = mysql.GrantReadOnlyAccess(
+				grantCtx,
+				logger,
+				request.Host,
+				request.Port,
+				request.AdminUsername,
+				request.AdminPassword,
+				request.IsHttps,
+				dbName,
+				request.Username,
+			)
+		case "mariadb", "MARIADB":
+			err = mariadb.GrantReadOnlyAccess(
+				grantCtx,
+				logger,
+				request.Host,
+				request.Port,
+				request.AdminUsername,
+				request.AdminPassword,
+				request.IsHttps,
+				dbName,
+				request.Username,
+			)
+		default:
+			err = fmt.Errorf("grant read-only access not supported for database type: %s", dbType)
+		}
+
 		if err != nil {
 			failedDatabases = append(failedDatabases, dbName)
 			errors = append(errors, err.Error())

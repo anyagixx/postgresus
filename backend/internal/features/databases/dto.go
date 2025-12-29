@@ -12,6 +12,8 @@ type IsReadOnlyResponse struct {
 // GrantReadOnlyAccessRequest is the request body for granting read-only access
 // to an existing user on multiple databases
 type GrantReadOnlyAccessRequest struct {
+	// Database type: "postgres", "mysql", "mariadb", "mongodb"
+	DatabaseType string `json:"databaseType" binding:"required"`
 	// Username of the read-only user to grant access to
 	Username string `json:"username" binding:"required"`
 	// Server connection details (admin credentials)

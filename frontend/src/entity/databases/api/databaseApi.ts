@@ -195,6 +195,7 @@ export interface DiscoverDatabasesResponse {
 }
 
 export interface GrantReadOnlyAccessRequest {
+  databaseType: string;
   username: string;
   host: string;
   port: number;
