@@ -210,13 +210,13 @@ export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef,
       // Get all databases in workspace
       const allDatabases = await databaseApi.getDatabases(workspaceId);
 
-      // Filter databases by serverId (exclude current database)
+      // Filter databases by serverId (include all databases on server)
       const serverDatabases = allDatabases.filter(
-        (db) => db.serverId === database.serverId && db.id !== database.id,
+        (db) => db.serverId === database.serverId,
       );
 
       if (serverDatabases.length === 0) {
-        message.info('No other databases found on this server');
+        message.info('No databases found on this server');
         setIsBackupAllServerLoading(false);
         return;
       }
@@ -265,11 +265,8 @@ export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef,
       // Get all databases in workspace
       const allDatabases = await databaseApi.getDatabases(workspaceId);
 
-      // Exclude current database
-      const workspaceDatabases = allDatabases.filter((db) => db.id !== database.id);
-
-      if (workspaceDatabases.length === 0) {
-        message.info('No other databases found in workspace');
+      if (allDatabases.length === 0) {
+        message.info('No databases found in workspace');
         setIsBackupAllWorkspaceLoading(false);
         return;
       }
@@ -278,7 +275,7 @@ export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef,
       let successCount = 0;
       let failCount = 0;
 
-      for (const db of workspaceDatabases) {
+      for (const db of allDatabases) {
         try {
           await backupsApi.makeBackup(db.id);
           successCount++;
@@ -316,11 +313,11 @@ export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef,
       // Get all databases to count
       const allDatabases = await databaseApi.getDatabases(workspaceId);
       const serverDatabases = allDatabases.filter(
-        (db) => db.serverId === database.serverId && db.id !== database.id,
+        (db) => db.serverId === database.serverId,
       );
 
       if (serverDatabases.length === 0) {
-        message.info('No other databases found on this server');
+        message.info('No databases found on this server');
         return;
       }
 
@@ -338,14 +335,13 @@ export const BackupsComponent = ({ database, isCanManageDBs, scrollContainerRef,
     try {
       // Get all databases to count
       const allDatabases = await databaseApi.getDatabases(workspaceId);
-      const workspaceDatabases = allDatabases.filter((db) => db.id !== database.id);
 
-      if (workspaceDatabases.length === 0) {
-        message.info('No other databases found in workspace');
+      if (allDatabases.length === 0) {
+        message.info('No databases found in workspace');
         return;
       }
 
-      setBackupAllWorkspaceCount(workspaceDatabases.length);
+      setBackupAllWorkspaceCount(allDatabases.length);
       setShowBackupAllWorkspaceConfirm(true);
     } catch (e) {
       alert((e as Error).message);
