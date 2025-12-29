@@ -126,12 +126,17 @@ func (s *RestoreService) RestoreBackupWithAuth(
 
 	// If TargetDatabaseId is provided, populate requestDTO with target database config + owner credentials
 	if requestDTO.TargetDatabaseId != nil {
-		// Validate that restore credentials are provided
-		if requestDTO.RestoreUsername == nil || *requestDTO.RestoreUsername == "" {
-			return errors.New("restore username is required for restoring to a different database")
-		}
-		if requestDTO.RestorePassword == nil || *requestDTO.RestorePassword == "" {
-			return errors.New("restore password is required for restoring to a different database")
+		// Check if restoring to the same database (current database)
+		isRestoringToCurrentDatabase := *requestDTO.TargetDatabaseId == database.ID
+
+		// Validate that restore credentials are provided only when restoring to a different database
+		if !isRestoringToCurrentDatabase {
+			if requestDTO.RestoreUsername == nil || *requestDTO.RestoreUsername == "" {
+				return errors.New("restore username is required for restoring to a different database")
+			}
+			if requestDTO.RestorePassword == nil || *requestDTO.RestorePassword == "" {
+				return errors.New("restore password is required for restoring to a different database")
+			}
 		}
 
 		targetDatabase, err := s.databaseService.GetDatabaseByID(*requestDTO.TargetDatabaseId)
@@ -145,33 +150,87 @@ func (s *RestoreService) RestoreBackupWithAuth(
 		}
 
 		// Use target database connection info but with owner credentials (not read-only)
+		// For current database, use existing credentials from database (decrypted)
+		// For different database, use provided restoreUsername/restorePassword
 		switch database.Type {
 		case databases.DatabaseTypePostgres:
 			if targetDatabase.Postgresql != nil {
 				pgCopy := *targetDatabase.Postgresql
-				pgCopy.Username = *requestDTO.RestoreUsername
-				pgCopy.Password = *requestDTO.RestorePassword
+				if isRestoringToCurrentDatabase {
+					// Use existing credentials from database (which already has encrypted password from GetDatabaseByID)
+					if database.Postgresql != nil {
+						decryptedPassword, err := s.fieldEncryptor.Decrypt(database.ID, database.Postgresql.Password)
+						if err != nil {
+							return fmt.Errorf("failed to decrypt password: %w", err)
+						}
+						pgCopy.Username = database.Postgresql.Username
+						pgCopy.Password = decryptedPassword
+					}
+				} else {
+					// Use provided credentials
+					pgCopy.Username = *requestDTO.RestoreUsername
+					pgCopy.Password = *requestDTO.RestorePassword
+				}
 				requestDTO.PostgresqlDatabase = &pgCopy
 			}
 		case databases.DatabaseTypeMysql:
 			if targetDatabase.Mysql != nil {
 				mysqlCopy := *targetDatabase.Mysql
-				mysqlCopy.Username = *requestDTO.RestoreUsername
-				mysqlCopy.Password = *requestDTO.RestorePassword
+				if isRestoringToCurrentDatabase {
+					// Use existing credentials from database (which already has encrypted password from GetDatabaseByID)
+					if database.Mysql != nil {
+						decryptedPassword, err := s.fieldEncryptor.Decrypt(database.ID, database.Mysql.Password)
+						if err != nil {
+							return fmt.Errorf("failed to decrypt password: %w", err)
+						}
+						mysqlCopy.Username = database.Mysql.Username
+						mysqlCopy.Password = decryptedPassword
+					}
+				} else {
+					// Use provided credentials
+					mysqlCopy.Username = *requestDTO.RestoreUsername
+					mysqlCopy.Password = *requestDTO.RestorePassword
+				}
 				requestDTO.MysqlDatabase = &mysqlCopy
 			}
 		case databases.DatabaseTypeMariadb:
 			if targetDatabase.Mariadb != nil {
 				mariadbCopy := *targetDatabase.Mariadb
-				mariadbCopy.Username = *requestDTO.RestoreUsername
-				mariadbCopy.Password = *requestDTO.RestorePassword
+				if isRestoringToCurrentDatabase {
+					// Use existing credentials from database (which already has encrypted password from GetDatabaseByID)
+					if database.Mariadb != nil {
+						decryptedPassword, err := s.fieldEncryptor.Decrypt(database.ID, database.Mariadb.Password)
+						if err != nil {
+							return fmt.Errorf("failed to decrypt password: %w", err)
+						}
+						mariadbCopy.Username = database.Mariadb.Username
+						mariadbCopy.Password = decryptedPassword
+					}
+				} else {
+					// Use provided credentials
+					mariadbCopy.Username = *requestDTO.RestoreUsername
+					mariadbCopy.Password = *requestDTO.RestorePassword
+				}
 				requestDTO.MariadbDatabase = &mariadbCopy
 			}
 		case databases.DatabaseTypeMongodb:
 			if targetDatabase.Mongodb != nil {
 				mongodbCopy := *targetDatabase.Mongodb
-				mongodbCopy.Username = *requestDTO.RestoreUsername
-				mongodbCopy.Password = *requestDTO.RestorePassword
+				if isRestoringToCurrentDatabase {
+					// Use existing credentials from database (which already has encrypted password from GetDatabaseByID)
+					if database.Mongodb != nil {
+						decryptedPassword, err := s.fieldEncryptor.Decrypt(database.ID, database.Mongodb.Password)
+						if err != nil {
+							return fmt.Errorf("failed to decrypt password: %w", err)
+						}
+						mongodbCopy.Username = database.Mongodb.Username
+						mongodbCopy.Password = decryptedPassword
+					}
+				} else {
+					// Use provided credentials
+					mongodbCopy.Username = *requestDTO.RestoreUsername
+					mongodbCopy.Password = *requestDTO.RestorePassword
+				}
 				requestDTO.MongodbDatabase = &mongodbCopy
 			}
 		}

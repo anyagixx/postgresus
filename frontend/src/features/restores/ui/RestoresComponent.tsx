@@ -164,7 +164,7 @@ export const RestoresComponent = ({ database, backup, workspaceId }: Props) => {
 
   const handleRestoreToCurrent = async () => {
     try {
-      // Восстановление в текущую базу (targetDatabaseId = database.id)
+      // Restore to current database (targetDatabaseId = database.id)
       await restoreApi.restoreBackup({
         backupId: backup.id,
         targetDatabaseId: database.id,
@@ -232,30 +232,30 @@ export const RestoresComponent = ({ database, backup, workspaceId }: Props) => {
 
     return (
       <div className="space-y-4">
-        {/* Опция 1: Восстановить в текущую базу */}
+        {/* Option 1: Restore to current database */}
         <div className="rounded border border-gray-300 p-4 dark:border-gray-600">
           <div className="mb-2">
-            <strong>1. Восстановить выбранный бэкап в выбранную базу</strong>
+            <strong>1. Restore selected backup to selected database</strong>
           </div>
           <div className="mb-3 text-sm text-gray-600 dark:text-gray-400">
-            База данных: <strong>{database.name}</strong>
+            Database: <strong>{database.name}</strong>
           </div>
           <Button 
             type="primary" 
             onClick={handleRestoreToCurrent}
             disabled={isRestoreInProgress}
           >
-            Восстановить в текущую базу
+            Restore to current database
           </Button>
         </div>
 
-        {/* Опция 2: Восстановить в другую базу на том же сервере */}
+        {/* Option 2: Restore to another database on the same server */}
         <div className="rounded border border-gray-300 p-4 dark:border-gray-600">
           <div className="mb-2">
-            <strong>2. Восстановить выбранный бэкап в другую базу на этом сервере</strong>
+            <strong>2. Restore selected backup to another database on this server</strong>
           </div>
           <div className="mb-3 text-sm text-gray-600 dark:text-gray-400">
-            Сервер: <strong>{serverAddress}</strong>
+            Server: <strong>{serverAddress}</strong>
           </div>
           
           {isLoadingDatabases ? (
@@ -325,10 +325,10 @@ export const RestoresComponent = ({ database, backup, workspaceId }: Props) => {
           )}
         </div>
 
-        {/* Опция 3: Ручной ввод */}
+        {/* Option 3: Manual input */}
         <div className="rounded border border-gray-300 p-4 dark:border-gray-600">
           <div className="mb-2">
-            <strong>3. Восстановить выбранный бэкап вручную, указав другой сервер и базу</strong>
+            <strong>3. Manually restore selected backup, specifying another server and database</strong>
           </div>
           <div className="my-3 text-sm text-gray-600 dark:text-gray-400">
             Enter info of the database we will restore backup to.{' '}
