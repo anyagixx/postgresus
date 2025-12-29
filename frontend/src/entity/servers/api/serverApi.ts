@@ -22,11 +22,6 @@ export interface UpdateServerRequest {
     isHttps?: boolean;
 }
 
-export type DeleteServerOption = 'unlink' | 'cascade';
-
-export interface DeleteServerRequest {
-    option: DeleteServerOption;
-}
 
 export const serverApi = {
     async getServers(workspaceId: string) {
@@ -56,9 +51,8 @@ export const serverApi = {
         );
     },
 
-    async deleteServer(serverId: string, option: DeleteServerOption) {
+    async deleteServer(serverId: string) {
         const requestOptions: RequestOptions = new RequestOptions();
-        requestOptions.setBody(JSON.stringify({ option }));
         return apiHelper.fetchDeleteRaw(
             `${getApplicationServer()}/api/v1/servers/${serverId}`,
             requestOptions,

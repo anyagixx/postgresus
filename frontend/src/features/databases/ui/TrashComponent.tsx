@@ -51,9 +51,23 @@ export const TrashComponent = ({ workspaceId, onRestore, refreshKey }: Props): R
 
   const handleRestore = async (database: Database) => {
     setRestoringId(database.id);
+    // Save server info before restoration
+    const hadServerId = !!database.serverId;
+    const serverName = database.serverName;
+    
     try {
       await databaseApi.restoreDatabase(database.id);
-      message.success(`Database "${database.name}" has been restored`);
+      
+      // If database had server_id, show warning that it was moved to Ungrouped
+      if (hadServerId) {
+        message.warning({
+          content: `Database "${database.name}" has been restored. It was moved to Ungrouped because the server "${serverName || 'Unknown'}" was deleted.`,
+          duration: 6,
+        });
+      } else {
+        message.success(`Database "${database.name}" has been restored`);
+      }
+      
       await loadDeletedDatabases();
       if (onRestore) {
         onRestore();

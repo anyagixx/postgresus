@@ -14,7 +14,8 @@ import (
 	"postgresus-backend/internal/features/databases/databases/postgresql"
 	"postgresus-backend/internal/features/notifiers"
 	users_models "postgresus-backend/internal/features/users/models"
-	workspaces_services "postgresus-backend/internal/features/workspaces/services"
+	workspaces_services 	"postgresus-backend/internal/features/workspaces/services"
+	"postgresus-backend/internal/storage"
 	"postgresus-backend/internal/util/encryption"
 
 	"github.com/google/uuid"
@@ -777,6 +778,26 @@ func (s *DatabaseService) RestoreDatabase(
 	}
 	if !canManage {
 		return errors.New("insufficient permissions to restore this database")
+	}
+
+	// If database has server_id, check if server still exists
+	// If server was deleted, unlink the database (set server_id = NULL)
+	if existingDatabase.ServerID != nil {
+		var serverExists bool
+		if err := storage.GetDb().
+			Table("servers").
+			Where("id = ?", existingDatabase.ServerID).
+			Select("1").
+			Limit(1).
+			Scan(&serverExists).Error; err == nil && !serverExists {
+			// Server does not exist, unlink database from deleted server
+			if err := storage.GetDb().
+				Model(&Database{}).
+				Where("id = ?", id).
+				Update("server_id", nil).Error; err != nil {
+				return fmt.Errorf("failed to unlink from deleted server: %w", err)
+			}
+		}
 	}
 
 	s.auditLogService.WriteAuditLog(

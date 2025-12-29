@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { databaseApi } from '../../../entity/databases';
 import type { Database } from '../../../entity/databases';
-import { serverApi, type DeleteServerOption } from '../../../entity/servers';
+import { serverApi } from '../../../entity/servers';
 import type { WorkspaceResponse } from '../../../entity/workspaces';
 import { useIsMobile } from '../../../shared/hooks';
 import { DiscoveryCreateDatabaseComponent } from './create/DiscoveryCreateDatabaseComponent';
@@ -58,7 +58,7 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
     linkedDatabases: Database[];
     loading: boolean;
     loadingDatabases: boolean;
-    selectedOption: DeleteServerOption;
+    confirmName: string;
   }>({
     open: false,
     serverId: null,
@@ -66,7 +66,7 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
     linkedDatabases: [],
     loading: false,
     loadingDatabases: false,
-    selectedOption: 'unlink',
+    confirmName: '',
   });
 
   // Delete database modal state
@@ -108,7 +108,7 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
       linkedDatabases: [],
       loading: false,
       loadingDatabases: true,
-      selectedOption: 'unlink',
+      confirmName: '',
     });
 
     try {
@@ -131,23 +131,26 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
   };
 
   const handleDeleteServer = async () => {
-    if (!deleteModal.serverId || !deleteModal.selectedOption) return;
+    if (!deleteModal.serverId) return;
+    
+    if (deleteModal.confirmName !== deleteModal.serverName) {
+      notification.error({
+        message: 'Server name does not match',
+        description: 'Please type the server name exactly to confirm deletion',
+      });
+      return;
+    }
 
     setDeleteModal(prev => ({ ...prev, loading: true }));
     try {
-      await serverApi.deleteServer(deleteModal.serverId, deleteModal.selectedOption);
+      await serverApi.deleteServer(deleteModal.serverId);
       
-      if (deleteModal.selectedOption === 'unlink') {
-        notification.success({
-          message: 'Server deleted',
-          description: `${deleteModal.linkedDatabases.length} databases have been unlinked from the server`,
-        });
-      } else if (deleteModal.selectedOption === 'cascade') {
-        notification.success({
-          message: 'Server and databases deleted',
-          description: `Server and ${deleteModal.linkedDatabases.length} databases have been deleted`,
-        });
-      }
+      notification.success({
+        message: 'Server deleted',
+        description: deleteModal.linkedDatabases.length > 0 
+          ? `Server and ${deleteModal.linkedDatabases.length} database(s) have been moved to Trash`
+          : 'Server has been deleted',
+      });
 
       setDeleteModal({
         open: false,
@@ -156,7 +159,7 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
         linkedDatabases: [],
         loading: false,
         loadingDatabases: false,
-        selectedOption: 'unlink',
+        confirmName: '',
       });
       loadDatabases(true);
     } catch (error) {
@@ -783,7 +786,7 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
           linkedDatabases: [],
           loading: false,
           loadingDatabases: false,
-          selectedOption: 'unlink',
+          confirmName: '',
         })}
         footer={[
           <Button
@@ -795,7 +798,7 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
               linkedDatabases: [],
               loading: false,
               loadingDatabases: false,
-              selectedOption: 'unlink',
+              confirmName: '',
             })}
           >
             Cancel
@@ -805,7 +808,7 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
             type="primary"
             danger
             loading={deleteModal.loading}
-            disabled={deleteModal.loadingDatabases}
+            disabled={deleteModal.loadingDatabases || (deleteModal.linkedDatabases.length > 0 && deleteModal.confirmName !== deleteModal.serverName)}
             onClick={handleDeleteServer}
           >
             Delete Server
@@ -824,34 +827,22 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                 <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">
                   ⚠️ Warning: This server has {deleteModal.linkedDatabases.length} linked database{deleteModal.linkedDatabases.length !== 1 ? 's' : ''}
                 </p>
+                <p className="mt-1 text-xs text-yellow-700 dark:text-yellow-300">
+                  All databases will be moved to Trash and can be restored within 30 days.
+                </p>
               </div>
 
-              <div className="mb-4">
-                <label className="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  Choose deletion option:
-                </label>
-                <Radio.Group
-                  value={deleteModal.selectedOption}
-                  onChange={(e) => setDeleteModal(prev => ({ ...prev, selectedOption: e.target.value }))}
-                  className="flex flex-col gap-3"
-                >
-                  <Radio value="unlink">
-                    <div>
-                      <div className="font-semibold">Option A: Unlink databases</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        Delete the server and unlink all {deleteModal.linkedDatabases.length} databases. Databases will remain in the "Ungrouped" section.
-                      </div>
-                    </div>
-                  </Radio>
-                  <Radio value="cascade">
-                    <div>
-                      <div className="font-semibold text-red-600 dark:text-red-400">Option B: Delete server and all databases</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        Delete the server and permanently delete all {deleteModal.linkedDatabases.length} linked databases. This action cannot be undone!
-                      </div>
-                    </div>
-                  </Radio>
-                </Radio.Group>
+              <div className="mb-4 rounded bg-red-50 p-3 dark:bg-red-900/20">
+                <p className="text-sm font-semibold text-red-800 dark:text-red-200 mb-2">
+                  Deleting this server will:
+                </p>
+                <ul className="text-xs text-red-700 dark:text-red-300 space-y-1 list-disc list-inside">
+                  <li>Permanently delete the server (this action cannot be undone)</li>
+                  <li>Move all {deleteModal.linkedDatabases.length} linked database{deleteModal.linkedDatabases.length !== 1 ? 's' : ''} to Trash</li>
+                </ul>
+                <p className="mt-2 text-xs text-red-700 dark:text-red-300">
+                  Note: Databases moved to Trash can be restored within 30 days. After 30 days, they will be permanently deleted.
+                </p>
               </div>
 
               <div className="mt-4 max-h-60 overflow-y-auto rounded border border-gray-200 dark:border-gray-700">
@@ -867,12 +858,50 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
                   ))}
                 </div>
               </div>
+
+              <div className="mt-4">
+                <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  To confirm deletion, type the server name:
+                </label>
+                <Input
+                  value={deleteModal.confirmName}
+                  onChange={(e) => setDeleteModal(prev => ({ ...prev, confirmName: e.target.value }))}
+                  placeholder={deleteModal.serverName}
+                  onPressEnter={() => {
+                    if (deleteModal.confirmName === deleteModal.serverName) {
+                      handleDeleteServer();
+                    }
+                  }}
+                  autoFocus
+                />
+              </div>
             </>
           ) : (
             <div className="py-4">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
+              <div className="mb-4 rounded bg-yellow-50 p-3 dark:bg-yellow-900/20">
+                <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">
+                  ⚠️ Warning: This action cannot be undone!
+                </p>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 This server has no linked databases. The server will be deleted permanently.
               </p>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  To confirm deletion, type the server name:
+                </label>
+                <Input
+                  value={deleteModal.confirmName}
+                  onChange={(e) => setDeleteModal(prev => ({ ...prev, confirmName: e.target.value }))}
+                  placeholder={deleteModal.serverName}
+                  onPressEnter={() => {
+                    if (deleteModal.confirmName === deleteModal.serverName) {
+                      handleDeleteServer();
+                    }
+                  }}
+                  autoFocus
+                />
+              </div>
             </div>
           )}
         </div>

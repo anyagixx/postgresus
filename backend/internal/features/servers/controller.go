@@ -195,19 +195,13 @@ func (c *ServerController) UpdateServer(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, updatedServer)
 }
 
-// DeleteServerRequest represents the request body for deleting a server
-type DeleteServerRequest struct {
-	Option DeleteServerOption `json:"option" binding:"required"` // "unlink" or "cascade"
-}
-
 // DeleteServer godoc
 // @Summary Delete a server
-// @Description Delete a server by its ID with options for handling linked databases
+// @Description Delete a server by its ID. All linked databases will be moved to Trash.
 // @Tags servers
 // @Accept json
 // @Produce json
 // @Param serverId path string true "Server ID"
-// @Param request body DeleteServerRequest true "Delete option: unlink (unlink databases) or cascade (delete with databases)"
 // @Success 200 {object} map[string]string
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
@@ -220,13 +214,7 @@ func (c *ServerController) DeleteServer(ctx *gin.Context) {
 		return
 	}
 
-	var request DeleteServerRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Option is required: unlink or cascade"})
-		return
-	}
-
-	if err := c.serverService.DeleteServer(user, serverID, request.Option); err != nil {
+	if err := c.serverService.DeleteServer(user, serverID); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

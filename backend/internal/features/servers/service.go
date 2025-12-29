@@ -16,13 +16,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// DeleteServerOption represents the deletion strategy
-type DeleteServerOption string
-
-const (
-	DeleteServerOptionUnlink DeleteServerOption = "unlink" // Option A: Unlink databases from server
-	DeleteServerOptionCascade DeleteServerOption = "cascade" // Option B: Delete server and all databases
-)
 
 type ServerService struct {
 	serverRepository *ServerRepository
@@ -108,7 +101,6 @@ func (s *ServerService) GetDatabasesByServerID(serverID uuid.UUID) ([]map[string
 func (s *ServerService) DeleteServer(
 	user *users_models.User,
 	serverID uuid.UUID,
-	option DeleteServerOption,
 ) error {
 	// Check if server exists
 	server, err := s.serverRepository.FindByID(serverID)
@@ -129,35 +121,14 @@ func (s *ServerService) DeleteServer(
 	}
 
 	if dbCount > 0 {
-		switch option {
-		case DeleteServerOptionUnlink:
-			// Option A: Unlink all databases from server (set server_id = NULL)
-			if err := storage.GetDb().
-				Model(&struct {
-					ID       uuid.UUID `gorm:"column:id"`
-					ServerID *uuid.UUID `gorm:"column:server_id"`
-				}{}).
-				Table("databases").
-				Where("server_id = ?", serverID).
-				Update("server_id", nil).Error; err != nil {
-				return fmt.Errorf("failed to unlink databases from server: %w", err)
-			}
-			s.logger.Info("Unlinked databases from server", "server_id", serverID, "count", dbCount)
-
-		case DeleteServerOptionCascade:
-			// Option B: Soft delete all linked databases, then delete server
-			// Soft delete directly using GORM (sets deleted_at)
-			if err := storage.GetDb().
-				Table("databases").
-				Where("server_id = ?", serverID).
-				Update("deleted_at", gorm.Expr("NOW()")).Error; err != nil {
-				return fmt.Errorf("failed to soft delete databases: %w", err)
-			}
-			s.logger.Info("Soft deleted databases with server", "server_id", serverID, "count", dbCount)
-
-		default:
-			return fmt.Errorf("invalid delete option: %s", option)
+		// Soft delete all linked databases (move to Trash)
+		if err := storage.GetDb().
+			Table("databases").
+			Where("server_id = ?", serverID).
+			Update("deleted_at", gorm.Expr("NOW()")).Error; err != nil {
+			return fmt.Errorf("failed to soft delete databases: %w", err)
 		}
+		s.logger.Info("Soft deleted databases with server", "server_id", serverID, "count", dbCount)
 	}
 
 	// Delete the server
