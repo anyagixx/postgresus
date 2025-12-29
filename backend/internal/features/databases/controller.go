@@ -2,13 +2,10 @@ package databases
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
-	"postgresus-backend/internal/features/databases/databases/mariadb"
-	"postgresus-backend/internal/features/databases/databases/mongodb"
-	"postgresus-backend/internal/features/databases/databases/mysql"
 	"postgresus-backend/internal/features/databases/databases/postgresql"
+	"postgresus-backend/internal/features/servers"
 	users_middleware "postgresus-backend/internal/features/users/middleware"
 	users_services "postgresus-backend/internal/features/users/services"
 	workspaces_services "postgresus-backend/internal/features/workspaces/services"
@@ -22,6 +19,7 @@ type DatabaseController struct {
 	databaseService  *DatabaseService
 	userService      *users_services.UserService
 	workspaceService *workspaces_services.WorkspaceService
+	serverService    *servers.ServerService
 }
 
 func (c *DatabaseController) RegisterRoutes(router *gin.RouterGroup) {
@@ -39,9 +37,6 @@ func (c *DatabaseController) RegisterRoutes(router *gin.RouterGroup) {
 	router.POST("/databases/is-readonly", c.IsUserReadOnly)
 	router.POST("/databases/create-readonly-user", c.CreateReadOnlyUser)
 	router.POST("/databases/grant-readonly-access", c.GrantReadOnlyAccess)
-	router.POST("/databases/:id/restore", c.RestoreDatabase)
-	router.DELETE("/databases/:id/permanent", c.PermanentDeleteDatabase)
-	router.GET("/databases/deleted", c.GetDeletedDatabases)
 }
 
 // CreateDatabase
@@ -419,24 +414,14 @@ func (c *DatabaseController) CreateReadOnlyUser(ctx *gin.Context) {
 	})
 }
 
-// DiscoveryRequest contains server connection parameters for database discovery
-type DiscoveryRequest struct {
-	DatabaseType string `json:"databaseType" binding:"required"` // POSTGRES, MYSQL, MARIADB, MONGODB
-	Host         string `json:"host"         binding:"required"`
-	Port         int    `json:"port"         binding:"required"`
-	Username     string `json:"username"     binding:"required"`
-	Password     string `json:"password"     binding:"required"`
-	IsHttps      bool   `json:"isHttps"`
-}
-
 // DiscoverDatabases
 // @Summary Discover databases on a server
-// @Description Connect to a database server and list all available databases
+// @Description Connect to a PostgreSQL server and list all available databases
 // @Tags databases
 // @Accept json
 // @Produce json
-// @Param request body DiscoveryRequest true "Server connection data with database type"
-// @Success 200 {object} map[string]interface{} "Response contains 'databases' array"
+// @Param request body postgresql.DiscoveryRequest true "Server connection data"
+// @Success 200 {array} postgresql.DatabaseInfo
 // @Failure 400
 // @Failure 401
 // @Router /databases/discover [post]
@@ -447,57 +432,13 @@ func (c *DatabaseController) DiscoverDatabases(ctx *gin.Context) {
 		return
 	}
 
-	var request DiscoveryRequest
+	var request postgresql.DiscoveryRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	var databases interface{}
-	var err error
-
-	switch DatabaseType(request.DatabaseType) {
-	case DatabaseTypePostgres:
-		pgReq := postgresql.DiscoveryRequest{
-			Host:     request.Host,
-			Port:     request.Port,
-			Username: request.Username,
-			Password: request.Password,
-			IsHttps:  request.IsHttps,
-		}
-		databases, err = postgresql.ListDatabasesOnServer(pgReq)
-	case DatabaseTypeMysql:
-		mysqlReq := mysql.DiscoveryRequest{
-			Host:     request.Host,
-			Port:     request.Port,
-			Username: request.Username,
-			Password: request.Password,
-			IsHttps:  request.IsHttps,
-		}
-		databases, err = mysql.ListDatabasesOnServer(mysqlReq)
-	case DatabaseTypeMariadb:
-		mariadbReq := mariadb.DiscoveryRequest{
-			Host:     request.Host,
-			Port:     request.Port,
-			Username: request.Username,
-			Password: request.Password,
-			IsHttps:  request.IsHttps,
-		}
-		databases, err = mariadb.ListDatabasesOnServer(mariadbReq)
-	case DatabaseTypeMongodb:
-		mongodbReq := mongodb.DiscoveryRequest{
-			Host:     request.Host,
-			Port:     request.Port,
-			Username: request.Username,
-			Password: request.Password,
-			IsHttps:  request.IsHttps,
-		}
-		databases, err = mongodb.ListDatabasesOnServer(mongodbReq)
-	default:
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "unsupported database type: " + request.DatabaseType})
-		return
-	}
-
+	databases, err := postgresql.ListDatabasesOnServer(request)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -561,9 +502,7 @@ func (c *DatabaseController) CreateDatabaseBatch(ctx *gin.Context) {
 		}
 		dbType := string(request.Databases[0].Type)
 
-		// Create or get server directly to avoid circular dependency
-		var err error
-		serverID, err = c.createOrGetServer(
+		server, err := c.serverService.GetOrCreateServerByHostPort(
 			request.WorkspaceID,
 			request.ServerName,
 			dbType,
@@ -577,6 +516,7 @@ func (c *DatabaseController) CreateDatabaseBatch(ctx *gin.Context) {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": "failed to create server: " + err.Error()})
 			return
 		}
+		serverID = &server.ID
 	}
 
 	var createdDatabases []*Database
@@ -637,48 +577,17 @@ func (c *DatabaseController) GrantReadOnlyAccess(ctx *gin.Context) {
 	var errors []string
 
 	for _, dbName := range request.Databases {
-		var err error
-		switch DatabaseType(request.DatabaseType) {
-		case DatabaseTypePostgres:
-			err = postgresql.GrantReadOnlyAccess(
-				grantCtx,
-				logger,
-				request.Host,
-				request.Port,
-				request.AdminUsername,
-				request.AdminPassword,
-				request.IsHttps,
-				dbName,
-				request.Username,
-			)
-		case DatabaseTypeMysql:
-			err = mysql.GrantReadOnlyAccess(
-				grantCtx,
-				logger,
-				request.Host,
-				request.Port,
-				request.AdminUsername,
-				request.AdminPassword,
-				request.IsHttps,
-				dbName,
-				request.Username,
-			)
-		case DatabaseTypeMariadb:
-			err = mariadb.GrantReadOnlyAccess(
-				grantCtx,
-				logger,
-				request.Host,
-				request.Port,
-				request.AdminUsername,
-				request.AdminPassword,
-				request.IsHttps,
-				dbName,
-				request.Username,
-			)
-		default:
-			err = fmt.Errorf("grant read-only access not supported for database type: %s", request.DatabaseType)
-		}
-
+		err := postgresql.GrantReadOnlyAccess(
+			grantCtx,
+			logger,
+			request.Host,
+			request.Port,
+			request.AdminUsername,
+			request.AdminPassword,
+			request.IsHttps,
+			dbName,
+			request.Username,
+		)
 		if err != nil {
 			failedDatabases = append(failedDatabases, dbName)
 			errors = append(errors, err.Error())
@@ -693,104 +602,4 @@ func (c *DatabaseController) GrantReadOnlyAccess(ctx *gin.Context) {
 		FailedDatabases:  failedDatabases,
 		Errors:           errors,
 	})
-}
-
-// RestoreDatabase
-// @Summary Restore a deleted database
-// @Description Restore a soft-deleted database from trash
-// @Tags databases
-// @Param id path string true "Database ID"
-// @Success 204
-// @Failure 400
-// @Failure 401
-// @Failure 500
-// @Router /databases/{id}/restore [post]
-func (c *DatabaseController) RestoreDatabase(ctx *gin.Context) {
-	user, ok := users_middleware.GetUserFromContext(ctx)
-	if !ok {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
-
-	id, err := uuid.Parse(ctx.Param("id"))
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid database ID"})
-		return
-	}
-
-	if err := c.databaseService.RestoreDatabase(user, id); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	ctx.Status(http.StatusNoContent)
-}
-
-// PermanentDeleteDatabase
-// @Summary Permanently delete a database
-// @Description Permanently delete a database from trash (cannot be undone)
-// @Tags databases
-// @Param id path string true "Database ID"
-// @Success 204
-// @Failure 400
-// @Failure 401
-// @Failure 500
-// @Router /databases/{id}/permanent [delete]
-func (c *DatabaseController) PermanentDeleteDatabase(ctx *gin.Context) {
-	user, ok := users_middleware.GetUserFromContext(ctx)
-	if !ok {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
-
-	id, err := uuid.Parse(ctx.Param("id"))
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid database ID"})
-		return
-	}
-
-	if err := c.databaseService.PermanentDeleteDatabase(user, id); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	ctx.Status(http.StatusNoContent)
-}
-
-// GetDeletedDatabases
-// @Summary Get deleted databases
-// @Description Get all soft-deleted databases in a workspace (trash)
-// @Tags databases
-// @Param workspaceId query string true "Workspace ID"
-// @Success 200 {array} Database
-// @Failure 400
-// @Failure 401
-// @Failure 500
-// @Router /databases/deleted [get]
-func (c *DatabaseController) GetDeletedDatabases(ctx *gin.Context) {
-	user, ok := users_middleware.GetUserFromContext(ctx)
-	if !ok {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
-
-	workspaceIDStr := ctx.Query("workspaceId")
-	if workspaceIDStr == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "workspaceId is required"})
-		return
-	}
-
-	workspaceID, err := uuid.Parse(workspaceIDStr)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid workspace ID"})
-		return
-	}
-
-	databases, err := c.databaseService.GetDeletedDatabases(user, workspaceID)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	ctx.JSON(http.StatusOK, databases)
 }

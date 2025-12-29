@@ -5,22 +5,29 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"time"
-
-	"postgresus-backend/internal/features/databases"
 	"postgresus-backend/internal/features/databases/databases/postgresql"
 	"postgresus-backend/internal/storage"
 	users_models "postgresus-backend/internal/features/users/models"
 	"postgresus-backend/internal/util/encryption"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"gorm.io/gorm"
+)
+
+// DeleteServerOption represents the deletion strategy
+type DeleteServerOption string
+
+const (
+	DeleteServerOptionUnlink DeleteServerOption = "unlink" // Option A: Unlink databases from server
+	DeleteServerOptionCascade DeleteServerOption = "cascade" // Option B: Delete server and all databases
 )
 
 type ServerService struct {
 	serverRepository *ServerRepository
 	logger           *slog.Logger
-	fieldEncryptor  encryption.FieldEncryptor
+	fieldEncryptor   encryption.FieldEncryptor
 }
 
 func (s *ServerService) CreateServer(
@@ -79,14 +86,6 @@ func (s *ServerService) UpdateServer(
 	server.HideSensitiveData()
 	return server, nil
 }
-
-// DeleteServerOption represents the deletion strategy
-type DeleteServerOption string
-
-const (
-	DeleteServerOptionUnlink DeleteServerOption = "unlink" // Option A: Unlink databases from server
-	DeleteServerOptionCascade DeleteServerOption = "cascade" // Option B: Delete server and all databases
-)
 
 func (s *ServerService) GetDatabasesByServerID(serverID uuid.UUID) ([]map[string]interface{}, error) {
 	var databases []map[string]interface{}
@@ -147,21 +146,12 @@ func (s *ServerService) DeleteServer(
 
 		case DeleteServerOptionCascade:
 			// Option B: Soft delete all linked databases, then delete server
-			// Get database IDs first
-			var dbIDs []uuid.UUID
+			// Soft delete directly using GORM (sets deleted_at)
 			if err := storage.GetDb().
 				Table("databases").
 				Where("server_id = ?", serverID).
-				Pluck("id", &dbIDs).Error; err != nil {
-				return fmt.Errorf("failed to get database IDs: %w", err)
-			}
-
-			// Soft delete each database (move to trash)
-			databasesRepo := &databases.DatabaseRepository{}
-			for _, dbID := range dbIDs {
-				if err := databasesRepo.Delete(dbID); err != nil {
-					return fmt.Errorf("failed to soft delete database %s: %w", dbID, err)
-				}
+				Update("deleted_at", gorm.Expr("NOW()")).Error; err != nil {
+				return fmt.Errorf("failed to soft delete databases: %w", err)
 			}
 			s.logger.Info("Soft deleted databases with server", "server_id", serverID, "count", dbCount)
 
@@ -173,9 +163,6 @@ func (s *ServerService) DeleteServer(
 	// Delete the server
 	return s.serverRepository.DeleteByID(serverID)
 }
-
-// deleteDatabase is no longer used - replaced with soft delete via DatabaseRepository
-// Kept for reference but should not be called
 
 func (s *ServerService) GetServer(
 	user *users_models.User,

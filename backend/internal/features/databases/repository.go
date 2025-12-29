@@ -149,29 +149,6 @@ func (r *DatabaseRepository) FindByID(id uuid.UUID) (*Database, error) {
 	return &database, nil
 }
 
-// FindByIDUnscoped finds database by ID including deleted ones (for restore)
-func (r *DatabaseRepository) FindByIDUnscoped(id uuid.UUID) (*Database, error) {
-	var database Database
-
-	if err := storage.
-		GetDb().
-		Unscoped().
-		Table("databases").
-		Select("databases.*, servers.name as server_name").
-		Joins("LEFT JOIN servers ON databases.server_id = servers.id").
-		Preload("Postgresql").
-		Preload("Mysql").
-		Preload("Mariadb").
-		Preload("Mongodb").
-		Preload("Notifiers").
-		Where("databases.id = ?", id).
-		First(&database).Error; err != nil {
-		return nil, err
-	}
-
-	return &database, nil
-}
-
 func (r *DatabaseRepository) FindByWorkspaceID(workspaceID uuid.UUID) ([]*Database, error) {
 	var databases []*Database
 
@@ -194,27 +171,12 @@ func (r *DatabaseRepository) FindByWorkspaceID(workspaceID uuid.UUID) ([]*Databa
 	return databases, nil
 }
 
-// Delete performs soft delete (sets deleted_at)
 func (r *DatabaseRepository) Delete(id uuid.UUID) error {
-	return storage.GetDb().Delete(&Database{}, id).Error
-}
-
-// Restore restores a soft-deleted database
-func (r *DatabaseRepository) Restore(id uuid.UUID) error {
-	return storage.GetDb().
-		Unscoped().
-		Model(&Database{}).
-		Where("id = ?", id).
-		Update("deleted_at", nil).Error
-}
-
-// PermanentDelete performs hard delete (removes from database)
-func (r *DatabaseRepository) PermanentDelete(id uuid.UUID) error {
 	db := storage.GetDb()
 
 	return db.Transaction(func(tx *gorm.DB) error {
 		var database Database
-		if err := tx.Unscoped().Where("id = ?", id).First(&database).Error; err != nil {
+		if err := tx.Where("id = ?", id).First(&database).Error; err != nil {
 			return err
 		}
 
@@ -249,37 +211,12 @@ func (r *DatabaseRepository) PermanentDelete(id uuid.UUID) error {
 			}
 		}
 
-		// Hard delete the database
-		if err := tx.Unscoped().Delete(&Database{}, id).Error; err != nil {
+		if err := tx.Delete(&Database{}, id).Error; err != nil {
 			return err
 		}
 
 		return nil
 	})
-}
-
-// FindDeletedByWorkspaceID finds all soft-deleted databases in a workspace
-func (r *DatabaseRepository) FindDeletedByWorkspaceID(workspaceID uuid.UUID) ([]*Database, error) {
-	var databases []*Database
-
-	if err := storage.
-		GetDb().
-		Unscoped().
-		Table("databases").
-		Select("databases.*, servers.name as server_name").
-		Joins("LEFT JOIN servers ON databases.server_id = servers.id").
-		Preload("Postgresql").
-		Preload("Mysql").
-		Preload("Mariadb").
-		Preload("Mongodb").
-		Preload("Notifiers").
-		Where("databases.workspace_id = ? AND databases.deleted_at IS NOT NULL", workspaceID).
-		Order("databases.deleted_at DESC").
-		Find(&databases).Error; err != nil {
-		return nil, err
-	}
-
-	return databases, nil
 }
 
 func (r *DatabaseRepository) IsNotifierUsing(notifierID uuid.UUID) (bool, error) {
@@ -301,58 +238,6 @@ func (r *DatabaseRepository) GetAllDatabases() ([]*Database, error) {
 
 	if err := storage.
 		GetDb().
-		Table("databases").
-		Select("databases.*, servers.name as server_name").
-		Joins("LEFT JOIN servers ON databases.server_id = servers.id").
-		Preload("Postgresql").
-		Preload("Mysql").
-		Preload("Mariadb").
-		Preload("Mongodb").
-		Preload("Notifiers").
-		Order("servers.name ASC NULLS LAST, databases.name ASC").
-		Find(&databases).Error; err != nil {
-		return nil, err
-	}
-
-	return databases, nil
-}
-
-func (r *DatabaseRepository) FindByServerID(serverID uuid.UUID) ([]*Database, error) {
-	var databases []*Database
-
-	if err := storage.
-		GetDb().
-		Table("databases").
-		Select("databases.*, servers.name as server_name").
-		Joins("LEFT JOIN servers ON databases.server_id = servers.id").
-		Preload("Postgresql").
-		Preload("Mysql").
-		Preload("Mariadb").
-		Preload("Mongodb").
-		Preload("Notifiers").
-		Where("databases.server_id = ?", serverID).
-		Order("databases.name ASC").
-		Find(&databases).Error; err != nil {
-		return nil, err
-	}
-
-	return databases, nil
-}
-
-func (r *DatabaseRepository) UnlinkFromServer(serverID uuid.UUID) error {
-	return storage.GetDb().
-		Model(&Database{}).
-		Where("server_id = ?", serverID).
-		Update("server_id", nil).Error
-}
-
-// GetAllDatabasesUnscoped returns all databases including deleted ones (for cleanup)
-func (r *DatabaseRepository) GetAllDatabasesUnscoped() ([]*Database, error) {
-	var databases []*Database
-
-	if err := storage.
-		GetDb().
-		Unscoped().
 		Table("databases").
 		Select("databases.*, servers.name as server_name").
 		Joins("LEFT JOIN servers ON databases.server_id = servers.id").

@@ -59,14 +59,7 @@ func (s *BackupService) OnBeforeBackupsStorageChange(databaseID uuid.UUID) error
 	return nil
 }
 
-// OnBeforeDatabaseRemove is called on soft delete - do NOT delete backups
 func (s *BackupService) OnBeforeDatabaseRemove(databaseID uuid.UUID) error {
-	// Soft delete - backup'ы сохраняются, ничего не делаем
-	return nil
-}
-
-// OnBeforeDatabasePermanentRemove is called on permanent delete - delete backups
-func (s *BackupService) OnBeforeDatabasePermanentRemove(databaseID uuid.UUID) error {
 	err := s.deleteDbBackups(databaseID)
 	if err != nil {
 		return err

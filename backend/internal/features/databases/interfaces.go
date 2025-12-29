@@ -27,7 +27,6 @@ type DatabaseCreationListener interface {
 
 type DatabaseRemoveListener interface {
 	OnBeforeDatabaseRemove(databaseID uuid.UUID) error
-	OnBeforeDatabasePermanentRemove(databaseID uuid.UUID) error
 }
 
 type DatabaseCopyListener interface {
