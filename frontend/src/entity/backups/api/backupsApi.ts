@@ -36,4 +36,11 @@ export const backupsApi = {
   async cancelBackup(id: string) {
     return apiHelper.fetchPostRaw(`${getApplicationServer()}/api/v1/backups/${id}/cancel`);
   },
+
+  async validateBackup(id: string) {
+    return apiHelper.fetchPostJson<{ message: string }>(
+      `${getApplicationServer()}/api/v1/backups/${id}/validate`,
+      new RequestOptions(),
+    );
+  },
 };
