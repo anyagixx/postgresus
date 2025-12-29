@@ -154,18 +154,18 @@ export const TrashComponent = ({ workspaceId, onRestore, refreshKey }: Props): R
                   key={database.id}
                   className="rounded border border-gray-200 bg-white p-4 shadow dark:border-gray-700 dark:bg-gray-800"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
                       <div className="mb-2 flex items-center gap-2">
                         {database.type && (
                           <img
                             src={getDatabaseLogoFromType(database.type)}
                             alt="databaseIcon"
-                            className="h-5 w-5"
+                            className="h-5 w-5 flex-shrink-0"
                           />
                         )}
-                        <span className="font-semibold">{database.name}</span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">({database.type})</span>
+                        <span className="font-semibold truncate">{database.name}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">({database.type})</span>
                       </div>
 
                       <div className="mb-2 text-sm text-gray-600 dark:text-gray-400">
@@ -180,7 +180,7 @@ export const TrashComponent = ({ workspaceId, onRestore, refreshKey }: Props): R
                       </div>
                     </div>
 
-                    <div className="ml-4 flex gap-2">
+                    <div className="flex gap-2 flex-shrink-0">
                       <Tooltip title="Restore database">
                         <Button
                           icon={<UndoOutlined />}
