@@ -54,6 +54,18 @@ func (uc *ValidateMongodbBackupUsecase) Execute(
 		}, nil
 	}
 
+	// Decrypt password for URI construction
+	decryptedPassword, err := uc.fieldEncryptor.Decrypt(database.ID, mongo.Password)
+	if err != nil {
+		return &ValidationResult{
+			IsValid: false,
+			Error:   stringPtr(fmt.Sprintf("failed to decrypt database password: %v", err)),
+		}, nil
+	}
+
+	// Build MongoDB URI (required for mongorestore --dryRun)
+	uri := mongo.BuildMongodumpURI(decryptedPassword)
+
 	// Get backup data from storage
 	fieldEncryptor := util_encryption.GetFieldEncryptor()
 	rawReader, err := storage.GetFile(fieldEncryptor, backup.ID)
@@ -89,14 +101,35 @@ func (uc *ValidateMongodbBackupUsecase) Execute(
 		config.GetEnv().MongodbInstallDir,
 	)
 
-	// Run mongorestore --dryRun with stdin input (like restore does)
-	cmd := exec.CommandContext(
-		ctx,
-		mongorestoreBin,
+	// Build command arguments with URI (required for --dryRun)
+	args := []string{
+		"--uri=" + uri,
 		"--archive",
 		"--gzip",
 		"--dryRun",
 		"--quiet",
+	}
+
+	// Create safe args for logging (mask password in URI)
+	safeArgs := make([]string, len(args))
+	for i, arg := range args {
+		if len(arg) > 6 && arg[:6] == "--uri=" {
+			safeArgs[i] = "--uri=mongodb://***:***@***"
+		} else {
+			safeArgs[i] = arg
+		}
+	}
+	uc.logger.Info(
+		"Executing MongoDB validation command",
+		"command", mongorestoreBin,
+		"args", safeArgs,
+	)
+
+	// Run mongorestore --dryRun with stdin input (like restore does)
+	cmd := exec.CommandContext(
+		ctx,
+		mongorestoreBin,
+		args...,
 	)
 
 	cmd.Stdin = backupReader
