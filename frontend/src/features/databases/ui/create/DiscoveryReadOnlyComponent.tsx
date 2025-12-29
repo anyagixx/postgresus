@@ -6,8 +6,14 @@ import {
     DatabaseType,
     type DiscoveredDatabase,
     type PostgresqlDatabase,
+    type MysqlDatabase,
+    type MariadbDatabase,
+    type MongodbDatabase,
     type ServerConnection,
     databaseApi,
+    MysqlVersion,
+    MariadbVersion,
+    MongodbVersion,
 } from '../../../../entity/databases';
 
 interface Props {
@@ -30,23 +36,84 @@ export const DiscoveryReadOnlyComponent = ({
     const [isShowSkipConfirmation, setShowSkipConfirmation] = useState(false);
     const [isAlreadyReadOnly, setIsAlreadyReadOnly] = useState(false);
 
+    // Get database type name for UI display
+    const getDatabaseTypeName = (): string => {
+        const dbType = serverConnection.databaseType || DatabaseType.POSTGRES;
+        switch (dbType) {
+            case DatabaseType.MYSQL:
+                return 'MySQL';
+            case DatabaseType.MARIADB:
+                return 'MariaDB';
+            case DatabaseType.MONGODB:
+                return 'MongoDB';
+            case DatabaseType.POSTGRES:
+            default:
+                return 'PostgreSQL';
+        }
+    };
+
+    const databaseTypeName = getDatabaseTypeName();
+
     // Create a temporary database object to use with the existing API
     // Note: We don't set id or workspaceId - the backend handles this case
     // by using the database object directly without looking up from DB
     const createTempDatabase = (): Database => {
         const firstDb = selectedDatabases[0];
-        return {
+        const dbType = serverConnection.databaseType || DatabaseType.POSTGRES;
+        
+        const baseStructure: Partial<Database> = {
             name: firstDb.name,
-            type: DatabaseType.POSTGRES,
-            postgresql: {
-                host: serverConnection.host,
-                port: serverConnection.port,
-                username: serverConnection.username,
-                password: serverConnection.password,
-                database: firstDb.name,
-                isHttps: serverConnection.isHttps,
-            } as PostgresqlDatabase,
-        } as Database;
+            type: dbType,
+            postgresql: undefined,
+            mysql: undefined,
+            mariadb: undefined,
+            mongodb: undefined,
+        };
+
+        const connectionData = {
+            host: serverConnection.host,
+            port: serverConnection.port,
+            username: serverConnection.username,
+            password: serverConnection.password,
+            database: firstDb.name,
+            isHttps: serverConnection.isHttps,
+        };
+
+        switch (dbType) {
+            case DatabaseType.MYSQL:
+                baseStructure.mysql = {
+                    id: undefined as unknown as string,
+                    version: MysqlVersion.MysqlVersion80,
+                    ...connectionData,
+                } as MysqlDatabase;
+                break;
+            case DatabaseType.MARIADB:
+                baseStructure.mariadb = {
+                    id: undefined as unknown as string,
+                    version: MariadbVersion.MariadbVersion106,
+                    ...connectionData,
+                } as MariadbDatabase;
+                break;
+            case DatabaseType.MONGODB:
+                baseStructure.mongodb = {
+                    id: undefined as unknown as string,
+                    version: MongodbVersion.MongodbVersion70,
+                    host: connectionData.host,
+                    port: connectionData.port,
+                    username: connectionData.username,
+                    password: connectionData.password,
+                    database: connectionData.database,
+                    authDatabase: 'admin',
+                    isHttps: connectionData.isHttps,
+                } as MongodbDatabase;
+                break;
+            case DatabaseType.POSTGRES:
+            default:
+                baseStructure.postgresql = connectionData as PostgresqlDatabase;
+                break;
+        }
+
+        return baseStructure as Database;
     };
 
     const checkReadOnlyUser = async (): Promise<boolean> => {
@@ -153,7 +220,7 @@ export const DiscoveryReadOnlyComponent = ({
                 </p>
 
                 <p className="mb-2">
-                    A read-only user is a PostgreSQL user with limited permissions that can only read
+                    A read-only user is a {databaseTypeName} user with limited permissions that can only read
                     data from your database, not modify it. This is recommended because:
                 </p>
 
