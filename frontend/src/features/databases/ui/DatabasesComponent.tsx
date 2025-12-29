@@ -162,6 +162,8 @@ export const DatabasesComponent = ({ contentHeight, workspace, isCanManageDBs }:
         confirmName: '',
       });
       loadDatabases(true);
+      // Обновляем корзину, чтобы удаленные базы сразу появились
+      setTrashRefreshKey(prev => prev + 1);
     } catch (error) {
       notification.error({
         message: 'Failed to delete server',

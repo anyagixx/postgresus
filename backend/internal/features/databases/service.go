@@ -210,11 +210,9 @@ func (s *DatabaseService) DeleteDatabase(
 		return errors.New("insufficient permissions to delete this database")
 	}
 
-	for _, listener := range s.dbRemoveListener {
-		if err := listener.OnBeforeDatabaseRemove(id); err != nil {
-			return err
-		}
-	}
+	// Note: OnBeforeDatabaseRemove is NOT called here for soft delete
+	// Backups should be preserved when database is moved to Trash
+	// OnBeforeDatabaseRemove is only called in PermanentDeleteDatabase for hard delete
 
 	s.auditLogService.WriteAuditLog(
 		fmt.Sprintf("Database deleted: %s", existingDatabase.Name),
