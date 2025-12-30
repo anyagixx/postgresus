@@ -6,14 +6,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/klauspost/compress/zstd"
 
-	"postgresus-backend/internal/config"
 	backup_encryption "postgresus-backend/internal/features/backups/backups/encryption"
 	backups_config "postgresus-backend/internal/features/backups/config"
 	usecases_common "postgresus-backend/internal/features/backups/backups/usecases/common"
@@ -21,9 +18,6 @@ import (
 	encryption_secrets "postgresus-backend/internal/features/encryption/secrets"
 	"postgresus-backend/internal/features/storages"
 	util_encryption "postgresus-backend/internal/util/encryption"
-	files_utils "postgresus-backend/internal/util/files"
-
-	"github.com/google/uuid"
 )
 
 type ValidateMariadbBackupUsecase struct {
@@ -46,7 +40,7 @@ func (uc *ValidateMariadbBackupUsecase) Execute(
 	storage *storages.Storage,
 ) (*ValidationResult, error) {
 	uc.logger.Info(
-		"Validating MariaDB backup integrity",
+		"Validating MariaDB backup integrity (streaming)",
 		"backupId", backup.ID,
 		"databaseId", database.ID,
 	)
@@ -59,27 +53,35 @@ func (uc *ValidateMariadbBackupUsecase) Execute(
 		}, nil
 	}
 
-	// Download backup to temporary file
-	tempFile, cleanupFunc, err := uc.downloadBackupToTempFile(ctx, backup, storage)
+	// Get backup data from storage (streaming, no temp file)
+	rawReader, err := storage.GetFile(uc.fieldEncryptor, backup.ID)
 	if err != nil {
 		return &ValidationResult{
 			IsValid: false,
-			Error:   stringPtr(fmt.Sprintf("failed to download backup: %v", err)),
+			Error:   stringPtr(fmt.Sprintf("failed to get backup file from storage: %v", err)),
 		}, nil
 	}
-	defer cleanupFunc()
+	defer func() {
+		if err := rawReader.Close(); err != nil {
+			uc.logger.Error("Failed to close backup reader", "error", err)
+		}
+	}()
 
-	// Open and decompress zstd file
-	file, err := os.Open(tempFile)
-	if err != nil {
-		return &ValidationResult{
-			IsValid: false,
-			Error:   stringPtr(fmt.Sprintf("failed to open backup file: %v", err)),
-		}, nil
+	// Setup decryption if needed
+	var backupReader io.Reader = rawReader
+	if backup.Encryption == backups_config.BackupEncryptionEncrypted {
+		decryptReader, err := uc.setupDecryption(rawReader, backup)
+		if err != nil {
+			return &ValidationResult{
+				IsValid: false,
+				Error:   stringPtr(fmt.Sprintf("failed to setup decryption: %v", err)),
+			}, nil
+		}
+		backupReader = decryptReader
 	}
-	defer file.Close()
 
-	zstdReader, err := zstd.NewReader(file)
+	// Decompress zstd stream
+	zstdReader, err := zstd.NewReader(backupReader)
 	if err != nil {
 		return &ValidationResult{
 			IsValid: false,
@@ -89,7 +91,7 @@ func (uc *ValidateMariadbBackupUsecase) Execute(
 	}
 	defer zstdReader.Close()
 
-	// Read first 64KB for syntax validation
+	// Read first 64KB for syntax validation (streaming!)
 	buffer := make([]byte, 64*1024)
 	n, err := zstdReader.Read(buffer)
 	if err != nil && err != io.EOF {
@@ -122,7 +124,7 @@ func (uc *ValidateMariadbBackupUsecase) Execute(
 	}
 
 	details := fmt.Sprintf(
-		"Backup file is valid. Contains CREATE TABLE: %v, INSERT: %v",
+		"Backup file is valid (streaming validation). Contains CREATE TABLE: %v, INSERT: %v",
 		hasCreateTable,
 		hasInsert,
 	)
@@ -132,81 +134,6 @@ func (uc *ValidateMariadbBackupUsecase) Execute(
 		Details:     stringPtr(details),
 		ValidatedAt: time.Now().UTC(),
 	}, nil
-}
-
-// downloadBackupToTempFile downloads backup data from storage to a temporary file
-func (uc *ValidateMariadbBackupUsecase) downloadBackupToTempFile(
-	ctx context.Context,
-	backup *usecases_common.BackupInfo,
-	storage *storages.Storage,
-) (string, func(), error) {
-	err := files_utils.EnsureDirectories([]string{
-		config.GetEnv().TempFolder,
-	})
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to ensure directories: %w", err)
-	}
-
-	tempDir, err := os.MkdirTemp(config.GetEnv().TempFolder, "validate_"+uuid.New().String())
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to create temporary directory: %w", err)
-	}
-
-	cleanupFunc := func() {
-		_ = os.RemoveAll(tempDir)
-	}
-
-	tempBackupFile := filepath.Join(tempDir, "backup.sql.zst")
-
-	uc.logger.Info(
-		"Downloading backup file from storage to temporary file",
-		"backupId", backup.ID,
-		"tempFile", tempBackupFile,
-		"encrypted", backup.Encryption == backups_config.BackupEncryptionEncrypted,
-	)
-
-	fieldEncryptor := util_encryption.GetFieldEncryptor()
-	rawReader, err := storage.GetFile(fieldEncryptor, backup.ID)
-	if err != nil {
-		cleanupFunc()
-		return "", nil, fmt.Errorf("failed to get backup file from storage: %w", err)
-	}
-	defer func() {
-		if err := rawReader.Close(); err != nil {
-			uc.logger.Error("Failed to close backup reader", "error", err)
-		}
-	}()
-
-	// Create a reader that handles decryption if needed
-	var backupReader io.Reader = rawReader
-	if backup.Encryption == backups_config.BackupEncryptionEncrypted {
-		decryptReader, err := uc.setupDecryption(rawReader, backup)
-		if err != nil {
-			cleanupFunc()
-			return "", nil, fmt.Errorf("failed to setup decryption: %w", err)
-		}
-		backupReader = decryptReader
-	}
-
-	tempFile, err := os.Create(tempBackupFile)
-	if err != nil {
-		cleanupFunc()
-		return "", nil, fmt.Errorf("failed to create temporary backup file: %w", err)
-	}
-	defer func() {
-		if err := tempFile.Close(); err != nil {
-			uc.logger.Error("Failed to close temporary file", "error", err)
-		}
-	}()
-
-	_, err = io.Copy(tempFile, backupReader)
-	if err != nil {
-		cleanupFunc()
-		return "", nil, fmt.Errorf("failed to write backup to temporary file: %w", err)
-	}
-
-	uc.logger.Info("Backup file written to temporary location", "tempFile", tempBackupFile)
-	return tempBackupFile, cleanupFunc, nil
 }
 
 func (uc *ValidateMariadbBackupUsecase) setupDecryption(
@@ -250,4 +177,3 @@ func (uc *ValidateMariadbBackupUsecase) setupDecryption(
 func stringPtr(s string) *string {
 	return &s
 }
-
